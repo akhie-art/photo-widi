@@ -223,15 +223,16 @@ export default function PreviewScreen({
             <div
               ref={containerRef}
               onClick={() => setActiveStickerId(null)}
-              className="relative rounded-xl border border-zinc-200 dark:border-zinc-800/80 max-h-[500px] object-contain shadow-2xl overflow-hidden select-none"
-              style={{
-                aspectRatio: activeLayout === "grid" ? "800/1050" : (activeLayout === "polaroid" ? "600/780" : "500/1202.5"),
-                width: activeLayout === "polaroid" ? "220px" : (activeLayout === "grid" ? "235px" : "200px"),
-                backgroundImage: `url(${compiledStripUrl})`,
-                backgroundSize: "cover",
-                backgroundPosition: "center",
-              }}
+              // Perubahan utama di bawah ini: menghapus hardcode dimensi dan mengganti ke w-fit
+              className="relative rounded-xl border border-zinc-200 dark:border-zinc-800/80 shadow-2xl overflow-hidden select-none w-fit h-fit mx-auto flex items-center justify-center"
             >
+              {/* Gambar dipanggil langsung menggunakan tag img agar proporsinya natural */}
+              <img 
+                src={compiledStripUrl} 
+                alt="Compiled Strip" 
+                className="max-h-[500px] w-auto object-contain block pointer-events-none" 
+              />
+              
               {/* Placed Stickers Interactive Layer */}
               {placedStickers.map(placed => {
                 const asset = config.customStickers?.find(s => s.id === placed.stickerId);
@@ -271,7 +272,7 @@ export default function PreviewScreen({
                           type="button"
                           onPointerDown={e => e.stopPropagation()}
                           onClick={() => deleteSticker(placed.id)}
-                          className="absolute -top-3 -left-3 w-5 h-5 rounded-full bg-red-500 text-white flex items-center justify-center shadow-md cursor-pointer hover:bg-red-600 border border-white"
+                          className="absolute -top-3 -left-3 w-5 h-5 rounded-full bg-red-500 text-white flex items-center justify-center shadow-md cursor-pointer hover:bg-red-600 border border-white z-10"
                           title="Hapus Stiker"
                         >
                           <X className="w-3 h-3" />
@@ -280,7 +281,7 @@ export default function PreviewScreen({
                           onPointerDown={e => handlePointerDown(e, placed.id, "resize")}
                           onPointerMove={handlePointerMove}
                           onPointerUp={handlePointerUp}
-                          className="absolute -bottom-3 -right-3 w-5 h-5 rounded-full bg-blue-500 text-white flex items-center justify-center shadow-md cursor-se-resize hover:bg-blue-600 border border-white"
+                          className="absolute -bottom-3 -right-3 w-5 h-5 rounded-full bg-blue-500 text-white flex items-center justify-center shadow-md cursor-se-resize hover:bg-blue-600 border border-white z-10"
                           title="Putar & Skala"
                         >
                           <span className="text-[9px] font-bold">↺</span>
@@ -338,10 +339,6 @@ export default function PreviewScreen({
             )}
           </div>
         </div>
-
-
-
-
 
         {/* Actions */}
         <div className="grid grid-cols-2 gap-3 mt-3">

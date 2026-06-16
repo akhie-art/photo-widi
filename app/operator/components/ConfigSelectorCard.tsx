@@ -115,6 +115,10 @@ export default function ConfigSelectorCard({
                   .map((item) => {
                     const isActive = activeFrameId === item.id;
                     
+                    // Fallback properti gambar agar sesuai dengan data asli dari config
+                    // Mencari thumbnailUrl, previewUrl, frameUrl, dll.
+                    const previewImage = (item as any).thumbnailUrl || (item as any).previewUrl || item.imageOverlay || (item as any).frameUrl || (item as any).backgroundUrl;
+                    
                     return (
                       <button
                         key={item.id}
@@ -126,14 +130,17 @@ export default function ConfigSelectorCard({
                             : "bg-white dark:bg-zinc-950 ring-1 ring-inset ring-zinc-200/80 dark:ring-zinc-800/80 hover:ring-zinc-300 dark:hover:ring-zinc-700 hover:shadow-sm"
                         }`}
                       >
-                        <div className={`relative w-full aspect-[2/3] rounded-xl overflow-hidden flex items-center justify-center p-2.5 mb-2 transition-colors ${
+                        {/* Perbaikan utama: Menghapus hardcode aspect-[2/3] dan menggantinya dengan h-[160px].
+                          Ini akan membuat template grid atau strip tampil sesuai proporsi aslinya berkat object-contain.
+                        */}
+                        <div className={`relative w-full h-[160px] rounded-xl overflow-hidden flex items-center justify-center p-2 mb-2 transition-colors ${
                            isActive ? "bg-white dark:bg-zinc-900 shadow-sm" : "bg-zinc-50 dark:bg-zinc-900/40"
                         }`}>
-                          {item.imageOverlay ? (
+                          {previewImage ? (
                             <img
-                              src={item.imageOverlay}
+                              src={previewImage}
                               alt={item.name}
-                              className="w-full h-full object-contain drop-shadow-sm group-hover:scale-[1.02] transition-transform duration-300"
+                              className="max-w-full max-h-full object-contain drop-shadow-sm group-hover:scale-[1.02] transition-transform duration-300"
                             />
                           ) : (
                             <span className="text-[10px] font-bold text-zinc-400">
@@ -145,6 +152,12 @@ export default function ConfigSelectorCard({
                           <span className={`text-xs font-semibold truncate w-full text-center ${isActive ? "text-blue-700 dark:text-blue-400" : "text-zinc-800 dark:text-zinc-200"}`}>
                             {item.name}
                           </span>
+                          {/* Opsional: Menampilkan tipe layout jika ada (misal: Strip, Grid) */}
+                          {(item as any).layout && (
+                            <span className="text-[9px] text-zinc-400 uppercase tracking-wider mt-0.5">
+                              {(item as any).layout}
+                            </span>
+                          )}
                         </div>
                       </button>
                     );
@@ -232,7 +245,7 @@ export default function ConfigSelectorCard({
                           <img
                             src={sticker.imageUrl}
                             alt={sticker.name}
-                            className="w-full h-full object-contain drop-shadow-sm group-hover:scale-110 group-hover:rotate-3 transition-transform duration-300"
+                            className="max-w-full max-h-full object-contain drop-shadow-sm group-hover:scale-110 group-hover:rotate-3 transition-transform duration-300"
                           />
                         ) : (
                           <span className="text-3xl pointer-events-none group-hover:scale-110 transition-transform duration-300">

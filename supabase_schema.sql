@@ -509,3 +509,46 @@ begin
   return true;
 end;
 $$ language plpgsql;
+
+
+-- ── Realtime: aktifkan perubahan langsung (INSERT/UPDATE/DELETE) ─────────────
+-- Jalankan ini agar Supabase Realtime bisa mengirim event ke client.
+-- Aman dijalankan ulang.
+do $$
+begin
+  -- Tambahkan tabel ke publikasi realtime jika belum ada
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime' and tablename = 'event_config'
+  ) then
+    alter publication supabase_realtime add table event_config;
+  end if;
+
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime' and tablename = 'filter_assets'
+  ) then
+    alter publication supabase_realtime add table filter_assets;
+  end if;
+
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime' and tablename = 'sticker_assets'
+  ) then
+    alter publication supabase_realtime add table sticker_assets;
+  end if;
+
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime' and tablename = 'preset_templates'
+  ) then
+    alter publication supabase_realtime add table preset_templates;
+  end if;
+
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime' and tablename = 'photo_strips'
+  ) then
+    alter publication supabase_realtime add table photo_strips;
+  end if;
+end $$;

@@ -130,7 +130,7 @@ function LoginContent() {
             <div className="w-7 h-7 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center text-white">
               <Camera className="w-4 h-4" />
             </div>
-             <span className="font-bold tracking-wider text-[9px] uppercase text-zinc-400">
+             <span className="font-bold tracking-wider text-[9px] uppercase text-zinc-400" suppressHydrationWarning>
               {config.eventName || "Glowbooth"}
             </span>
           </div>
@@ -141,7 +141,7 @@ function LoginContent() {
               <Camera className="w-8 h-8 text-zinc-400" />
             </div>
             <div className="text-center flex flex-col gap-1.5">
-              <h2 className="text-lg font-black leading-none tracking-tight text-white">
+              <h2 className="text-lg font-black leading-none tracking-tight text-white" suppressHydrationWarning>
                 {config.eventName || "Glowbooth"} System
               </h2>
               <p className="text-[9px] text-zinc-500 max-w-[170px] leading-relaxed mx-auto font-medium">
@@ -151,7 +151,7 @@ function LoginContent() {
           </div>
 
           {/* Bottom Footer Info */}
-          <div className="text-[8px] text-zinc-650 font-mono z-10 tracking-wider uppercase">
+          <div className="text-[8px] text-zinc-650 font-mono z-10 tracking-wider uppercase" suppressHydrationWarning>
             &copy; {new Date().getFullYear()} {config.eventName || "GLOWBOOTH"}
           </div>
         </div>

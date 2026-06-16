@@ -290,15 +290,12 @@ export default function CustomerBoothSession() {
     });
 
   // Layout lists based on admin global rules & custom layouts
-  // Layout lists based on admin global rules
   const activeLayoutsList = LAYOUTS.filter((l) => {
     if (!config.allowedLayouts || config.allowedLayouts.length === 0 || (config.allowedLayouts.length === 1 && config.allowedLayouts[0] === "strip")) {
       return true;
     }
     return config.allowedLayouts.includes(l.id);
   });
-
-
 
   // Identify currently active preset template
   const selectedFrameTemplate =
@@ -317,8 +314,7 @@ export default function CustomerBoothSession() {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setIsMirrored(config.mirrorDefault ?? true);
       
-      // Auto-initialize activeFrameId (prefer admin active template first, fallback to first preset)
-      // Auto-initialize activeFrameId (prefer admin active template first, fallback to first preset)
+      // Auto-initialize activeFrameId
       const initialPresetId = config.activePresetTemplateId || (config.presetTemplates && config.presetTemplates[0]?.id) || "";
       if (initialPresetId && !activeFrameId) {
         // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -386,8 +382,6 @@ export default function CustomerBoothSession() {
 
     getCameras();
   }, []);
-
-
 
   const startCamera = async () => {
     stopCamera();
@@ -580,9 +574,10 @@ export default function CustomerBoothSession() {
   const generateFinalStrip = async () => {
     setIsRendering(true);
     try {
+      // PERBAIKAN: Menggunakan activePresetTemplateId alih-alih activeFrameId
       const activeConfig = {
         ...config,
-        activeFrameId: activeFrameId, // Pass customer selected template frame id
+        activePresetTemplateId: activeFrameId, 
         frameText: customText || config.frameText,
       };
       const result = await renderPhotoStrip({
@@ -610,9 +605,10 @@ export default function CustomerBoothSession() {
     if (!compiledStripUrl) return;
     setIsRendering(true);
     try {
+      // PERBAIKAN: Menggunakan activePresetTemplateId alih-alih activeFrameId
       const activeConfig = {
         ...config,
-        activeFrameId: activeFrameId,
+        activePresetTemplateId: activeFrameId,
         frameText: customText || config.frameText,
       };
       
@@ -651,9 +647,10 @@ export default function CustomerBoothSession() {
     if (!compiledStripUrl) return;
     setIsRendering(true);
     try {
+      // PERBAIKAN: Menggunakan activePresetTemplateId alih-alih activeFrameId
       const activeConfig = {
         ...config,
-        activeFrameId: activeFrameId,
+        activePresetTemplateId: activeFrameId,
         frameText: customText || config.frameText,
       };
       

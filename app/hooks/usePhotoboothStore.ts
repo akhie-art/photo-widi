@@ -139,9 +139,6 @@ function lsSetConfig(cfg: EventConfig) {
   } catch (err) {
     console.warn("[Storage] Failed to save config to sessionStorage:", err);
   }
-  try {
-    window.dispatchEvent(new StorageEvent("storage", { key: "glow_booth_config", newValue: JSON.stringify(cfg) }));
-  } catch {}
 }
 
 function lsGetPhotos(): PhotoStrip[] {
@@ -175,9 +172,6 @@ function lsSetPhotos(photos: PhotoStrip[]) {
       sessionStorage.removeItem("glow_booth_photos");
     } catch {}
   }
-  try {
-    window.dispatchEvent(new StorageEvent("storage", { key: "glow_booth_photos", newValue: JSON.stringify(photos) }));
-  } catch (err) {}
 }
 
 // ─── Migration helper ─────────────────────────────────────────────────────────
@@ -256,7 +250,8 @@ export function usePhotoboothStore() {
     }
 
     const init = async () => {
-      setIsLoading(true);
+      // Only show loading spinner if there's no cached data yet (first ever load)
+      if (!cachedCfg) setIsLoading(true);
       try {
         // ── 1. Fetch Event Config ──
         const { data: cfgRow, error: cfgErr } = await supabase
@@ -369,21 +364,164 @@ export function usePhotoboothStore() {
     init();
   }, []);
 
-  // ── Cross-tab sync via localStorage StorageEvent ──────────────────────────
+  // ── Supabase Realtime: sync changes instantly across all components ────────
   useEffect(() => {
     if (typeof window === "undefined") return;
 
-    const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === "glow_booth_config" && e.newValue) {
-        try { setConfig(JSON.parse(e.newValue)); } catch {}
-      }
-      if (e.key === "glow_booth_photos" && e.newValue) {
-        try { setPhotos(JSON.parse(e.newValue)); } catch {}
-      }
-    };
+    // Unique name per hook instance — prevents collision when multiple
+    // components call usePhotoboothStore() at the same time.
+    const channelName = `admin-realtime-sync-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const channel = supabase
+      .channel(channelName)
 
-    window.addEventListener("storage", handleStorageChange);
-    return () => window.removeEventListener("storage", handleStorageChange);
+      // ── preset_templates ──
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "preset_templates" }, (payload) => {
+        const r = payload.new as any;
+        const newPreset: PresetTemplate = {
+          id: r.id, name: r.name,
+          imageOverlay: r.image_overlay || undefined,
+          customSlots: r.custom_slots || undefined,
+          overlayX: r.overlay_x != null ? Number(r.overlay_x) : undefined,
+          overlayY: r.overlay_y != null ? Number(r.overlay_y) : undefined,
+          overlayW: r.overlay_w != null ? Number(r.overlay_w) : undefined,
+          overlayH: r.overlay_h != null ? Number(r.overlay_h) : undefined,
+          overlayRotation: r.overlay_rotation != null ? Number(r.overlay_rotation) : undefined,
+          forceLayout: r.force_layout ?? true,
+        };
+        setConfig((prev) => {
+          if (prev.presetTemplates?.find(p => p.id === newPreset.id)) return prev;
+          const updated = { ...prev, presetTemplates: [...(prev.presetTemplates || []), newPreset] };
+          setTimeout(() => lsSetConfig(updated), 0);
+          return updated;
+        });
+      })
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "preset_templates" }, (payload) => {
+        const r = payload.new as any;
+        setConfig((prev) => {
+          const updated = {
+            ...prev,
+            presetTemplates: (prev.presetTemplates || []).map(p =>
+              p.id === r.id ? {
+                ...p,
+                name: r.name,
+                imageOverlay: r.image_overlay || undefined,
+                customSlots: r.custom_slots || undefined,
+                overlayX: r.overlay_x != null ? Number(r.overlay_x) : undefined,
+                overlayY: r.overlay_y != null ? Number(r.overlay_y) : undefined,
+                overlayW: r.overlay_w != null ? Number(r.overlay_w) : undefined,
+                overlayH: r.overlay_h != null ? Number(r.overlay_h) : undefined,
+                overlayRotation: r.overlay_rotation != null ? Number(r.overlay_rotation) : undefined,
+                forceLayout: r.force_layout ?? true,
+              } : p
+            ),
+          };
+          setTimeout(() => lsSetConfig(updated), 0);
+          return updated;
+        });
+      })
+      .on("postgres_changes", { event: "DELETE", schema: "public", table: "preset_templates" }, (payload) => {
+        const deletedId = (payload.old as any).id;
+        setConfig((prev) => {
+          const updated = { ...prev, presetTemplates: (prev.presetTemplates || []).filter(p => p.id !== deletedId) };
+          setTimeout(() => lsSetConfig(updated), 0);
+          return updated;
+        });
+      })
+
+      // ── filter_assets ──
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "filter_assets" }, (payload) => {
+        const r = payload.new as any;
+        const newFilter: FilterAsset = { id: r.id, name: r.name, css: r.css };
+        setConfig((prev) => {
+          if (prev.customFilters?.find(f => f.id === newFilter.id)) return prev;
+          const updated = { ...prev, customFilters: [...(prev.customFilters || []), newFilter] };
+          setTimeout(() => lsSetConfig(updated), 0);
+          return updated;
+        });
+      })
+      .on("postgres_changes", { event: "DELETE", schema: "public", table: "filter_assets" }, (payload) => {
+        const deletedId = (payload.old as any).id;
+        setConfig((prev) => {
+          const updated = { ...prev, customFilters: (prev.customFilters || []).filter(f => f.id !== deletedId) };
+          setTimeout(() => lsSetConfig(updated), 0);
+          return updated;
+        });
+      })
+
+      // ── sticker_assets ──
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "sticker_assets" }, (payload) => {
+        const r = payload.new as any;
+        const newSticker: StickerAsset = { id: r.id, name: r.name, imageUrl: r.image_url };
+        setConfig((prev) => {
+          if (prev.customStickers?.find(s => s.id === newSticker.id)) return prev;
+          const updated = { ...prev, customStickers: [...(prev.customStickers || []), newSticker] };
+          setTimeout(() => lsSetConfig(updated), 0);
+          return updated;
+        });
+      })
+      .on("postgres_changes", { event: "DELETE", schema: "public", table: "sticker_assets" }, (payload) => {
+        const deletedId = (payload.old as any).id;
+        setConfig((prev) => {
+          const updated = { ...prev, customStickers: (prev.customStickers || []).filter(s => s.id !== deletedId) };
+          setTimeout(() => lsSetConfig(updated), 0);
+          return updated;
+        });
+      })
+
+      // ── photo_strips ──
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "photo_strips" }, (payload) => {
+        const r = payload.new as any;
+        const newPhoto: PhotoStrip = {
+          id: r.id,
+          dataUrl: r.data_url,
+          customerName: r.customer_name ?? undefined,
+          customerPhone: r.customer_phone ?? undefined,
+          sessionsCount: r.sessions_count ?? undefined,
+          timestamp: r.timestamp ?? new Date().toLocaleTimeString(),
+          capturedPhotos: r.captured_photos ?? undefined,
+          operatorName: r.operator_name ?? undefined,
+          paymentMethod: r.payment_method ?? undefined,
+          amount: r.amount ?? undefined,
+        };
+        setPhotos((prev) => {
+          if (prev.find(p => p.id === newPhoto.id)) return prev;
+          const updated = [newPhoto, ...prev];
+          setTimeout(() => lsSetPhotos(updated), 0);
+          return updated;
+        });
+      })
+      .on("postgres_changes", { event: "DELETE", schema: "public", table: "photo_strips" }, (payload) => {
+        const deletedId = (payload.old as any).id;
+        setPhotos((prev) => {
+          const updated = prev.filter(p => p.id !== deletedId);
+          setTimeout(() => lsSetPhotos(updated), 0);
+          return updated;
+        });
+      })
+
+      // ── event_config ──
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "event_config" }, (payload) => {
+        const newCfgJson = (payload.new as any).config_json;
+        if (newCfgJson) {
+          setConfig((prev) => {
+            const merged: EventConfig = {
+              ...prev,
+              ...newCfgJson,
+              customFilters: prev.customFilters,
+              customStickers: prev.customStickers,
+              presetTemplates: prev.presetTemplates,
+            };
+            setTimeout(() => lsSetConfig(merged), 0);
+            return merged;
+          });
+        }
+      })
+
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   // ── Update Config (Supabase + localStorage) ───────────────────────────────
