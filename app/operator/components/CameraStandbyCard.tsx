@@ -23,6 +23,8 @@ interface CameraStandbyCardProps {
   activeFilter: FilterItem;
   startCaptureSequence: () => void;
   onCancel: () => void;
+  filledPhotosCount: number;
+  layoutsCount: number;
 }
 
 export default function CameraStandbyCard({
@@ -38,9 +40,12 @@ export default function CameraStandbyCard({
   activeFilter,
   startCaptureSequence,
   onCancel,
+  filledPhotosCount,
+  layoutsCount,
 }: CameraStandbyCardProps) {
+  const allPhotosDone = filledPhotosCount >= layoutsCount;
   return (
-    <div className="flex-1 bg-white dark:bg-[#121214] border border-zinc-200/80 dark:border-zinc-800/80 rounded-3xl p-5 flex flex-col justify-between gap-5 shadow-xl transition-colors">
+    <div className="flex-1 bg-white dark:bg-[#121214] border border-zinc-200/80 dark:border-zinc-800/80 rounded-3xl p-5 flex flex-col gap-5 shadow-xl transition-colors">
       
       {/* Workspace HUD Header */}
       <div className="w-full flex items-center justify-between pb-2 shrink-0 select-none border-b border-zinc-100 dark:border-zinc-800/50">
@@ -86,7 +91,7 @@ export default function CameraStandbyCard({
       </div>
 
       {/* Large Standby Camera Viewport */}
-      <div className="relative aspect-[4/3] w-full rounded-2xl overflow-hidden border border-zinc-200/80 dark:border-zinc-800/60 bg-black shadow-inner flex items-center justify-center">
+      <div className="relative aspect-[4/3] w-full flex-1 min-h-0 rounded-2xl overflow-hidden border border-zinc-200/80 dark:border-zinc-800/60 bg-black shadow-inner flex items-center justify-center">
         <video
           ref={videoRef}
           autoPlay
@@ -115,42 +120,44 @@ export default function CameraStandbyCard({
         )}
       </div>
 
-      {/* Shutter controls */}
-      <div className="w-full flex items-center justify-between pt-2 px-1">
-        <Button
-          variant="ghost"
-          onClick={onCancel}
-          disabled={isCapturing}
-          className="text-xs font-mono text-zinc-400 dark:text-zinc-500 hover:text-red-500 dark:hover:text-red-400 hover:bg-red-500/5 h-10 px-4 rounded-xl cursor-pointer transition-all"
-        >
-          <X className="w-3.5 h-3.5 mr-1.5" />
-          <span>Batal</span>
-        </Button>
+      {/* Shutter controls — hidden once all photos are done */}
+      {!allPhotosDone && (
+        <div className="w-full flex items-center justify-between pt-2 px-1">
+          <Button
+            variant="ghost"
+            onClick={onCancel}
+            disabled={isCapturing}
+            className="text-xs font-mono text-zinc-400 dark:text-zinc-500 hover:text-red-500 dark:hover:text-red-400 hover:bg-red-500/5 h-10 px-4 rounded-xl cursor-pointer transition-all"
+          >
+            <X className="w-3.5 h-3.5 mr-1.5" />
+            <span>Batal</span>
+          </Button>
 
-        {/* Shutter Button */}
-        <button
-          onClick={startCaptureSequence}
-          disabled={isCapturing}
-          className="w-16 h-16 rounded-full bg-zinc-100 dark:bg-zinc-900 border-4 border-zinc-300 dark:border-zinc-800 flex items-center justify-center hover:scale-105 disabled:opacity-45 disabled:pointer-events-none transition-all cursor-pointer group relative shadow-lg"
-          title="Mulai Jepret"
-        >
-          <span
-            className={`absolute inset-1 rounded-full transition-all duration-300 ${
-              isCapturing ? "bg-red-500 animate-pulse scale-90" : "bg-blue-600 group-hover:bg-blue-500"
-            }`}
-          />
-          {!isCapturing && <Camera className="w-5 h-5 text-white z-10" strokeWidth={1.5} />}
-        </button>
+          {/* Shutter Button */}
+          <button
+            onClick={startCaptureSequence}
+            disabled={isCapturing}
+            className="w-16 h-16 rounded-full bg-zinc-100 dark:bg-zinc-900 border-4 border-zinc-300 dark:border-zinc-800 flex items-center justify-center hover:scale-105 disabled:opacity-45 disabled:pointer-events-none transition-all cursor-pointer group relative shadow-lg"
+            title="Mulai Jepret"
+          >
+            <span
+              className={`absolute inset-1 rounded-full transition-all duration-300 ${
+                isCapturing ? "bg-red-500 animate-pulse scale-90" : "bg-blue-600 group-hover:bg-blue-500"
+              }`}
+            />
+            {!isCapturing && <Camera className="w-5 h-5 text-white z-10" strokeWidth={1.5} />}
+          </button>
 
-        <Button
-          variant="outline"
-          onClick={() => setIsMirrored(!isMirrored)}
-          className="bg-transparent border-zinc-200 dark:border-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-900 text-xs font-mono text-zinc-500 dark:text-zinc-400 px-4 h-10 rounded-xl cursor-pointer transition-all shadow-none"
-        >
-          <RefreshCw className="w-3.5 h-3.5 mr-1.5" />
-          <span>Mirror</span>
-        </Button>
-      </div>
+          <Button
+            variant="outline"
+            onClick={() => setIsMirrored(!isMirrored)}
+            className="bg-transparent border-zinc-200 dark:border-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-900 text-xs font-mono text-zinc-500 dark:text-zinc-400 px-4 h-10 rounded-xl cursor-pointer transition-all shadow-none"
+          >
+            <RefreshCw className="w-3.5 h-3.5 mr-1.5" />
+            <span>Mirror</span>
+          </Button>
+        </div>
+      )}
     </div>
   );
 }

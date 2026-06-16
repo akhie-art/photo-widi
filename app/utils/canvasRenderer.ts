@@ -205,7 +205,8 @@ export async function renderPhotoStrip({
               }
             });
           } else if (activeTemplate?.customSlots && activeTemplate.customSlots.length > 1) {
-            const slots = activeTemplate.customSlots;
+            const collatorR = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
+            const slots = [...activeTemplate.customSlots].sort((a, b) => collatorR.compare(a.id, b.id));
             slots.forEach((slot, i) => {
               const img = loadedImages[i];
               if (!img) return;

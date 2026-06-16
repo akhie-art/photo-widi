@@ -154,6 +154,8 @@ export default function CaptureScreen({
         activeFilter={activeFilter}
         startCaptureSequence={startCaptureSequence}
         onCancel={onCancel}
+        filledPhotosCount={filledPhotosCount}
+        layoutsCount={layoutsCount}
       />
 
       {/* COLUMN 3: PHOTO STRIP PROGRESS/RESULTS */}

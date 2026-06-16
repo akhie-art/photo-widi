@@ -142,7 +142,9 @@ export function useCaptureLayout({
       }
 
       if (activeTemplate?.customSlots && activeTemplate.customSlots.length > 1) {
-        return activeTemplate.customSlots.map(s => ({
+        const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
+        const sortedSlots = [...activeTemplate.customSlots].sort((a, b) => collator.compare(a.id, b.id));
+        return sortedSlots.map(s => ({
           left:   `${s.xPct}%`,
           top:    `${s.yPct}%`,
           width:  `${s.widthPct}%`,
