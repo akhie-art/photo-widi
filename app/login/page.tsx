@@ -28,6 +28,45 @@ function LoginContent() {
     setTheme(isDark ? "dark" : "light");
   }, []);
 
+  // Auto-redirect if already logged in
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    let mounted = true;
+
+    const checkExistingSession = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session) {
+          const role = session.user?.user_metadata?.role;
+          const displayName = session.user?.user_metadata?.display_name || "Operator";
+          if (role === "admin") {
+            if (mounted) {
+              sessionStorage.setItem("glow_admin_auth", "true");
+              sessionStorage.removeItem("glow_operator_auth");
+              router.replace(redirectPath || "/admin");
+            }
+          } else if (role === "operator") {
+            if (mounted) {
+              sessionStorage.setItem("glow_operator_name", displayName);
+              sessionStorage.setItem("glow_operator_auth", "true");
+              sessionStorage.removeItem("glow_admin_auth");
+              router.replace(redirectPath && redirectPath !== "/" ? redirectPath : "/operator");
+            }
+          }
+        }
+      } catch (err) {
+        console.warn("Check existing session failed:", err);
+      }
+    };
+
+    checkExistingSession();
+
+    return () => {
+      mounted = false;
+    };
+  }, [router, redirectPath]);
+
   const toggleTheme = () => {
     const newTheme = theme === "dark" ? "light" : "dark";
     setTheme(newTheme);

@@ -119,24 +119,41 @@ export default function CustomerBoothSession() {
   useEffect(() => {
     if (typeof window === "undefined") return;
 
+    let mounted = true;
+
     const checkAuth = async () => {
       try {
-        const { data: { user } } = await supabase.auth.getUser();
-        const role = user?.user_metadata?.role;
-        if (user && role === "operator") {
-          setAuthorized(true);
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session) {
+          const role = session.user?.user_metadata?.role;
+          if (role === "operator") {
+            if (mounted) setAuthorized(true);
+          } else {
+            if (mounted) router.replace("/login");
+          }
         } else {
-          router.replace("/login");
+          if (mounted) router.replace("/login");
         }
       } catch (err) {
         console.error("Session page auth check failed:", err);
-        router.replace("/login");
+        const operatorAuthFlag = sessionStorage.getItem("glow_operator_auth");
+        if (operatorAuthFlag === "true") {
+          if (mounted) setAuthorized(true);
+        } else {
+          if (mounted) router.replace("/login");
+        }
       }
     };
     checkAuth();
 
-    const isDark = document.documentElement.classList.contains("dark");
-    setTheme(isDark ? "dark" : "light");
+    if (mounted) {
+      const isDark = document.documentElement.classList.contains("dark");
+      setTheme(isDark ? "dark" : "light");
+    }
+
+    return () => {
+      mounted = false;
+    };
   }, [router]);
 
   const toggleTheme = () => {

@@ -138,6 +138,7 @@ export default function PresetsTab({ config, addPresetTemplate, updatePresetTemp
     cropDrag.current = { startX: e.clientX, startY: e.clientY, startCrop: { ...crop }, handle };
     window.addEventListener('pointermove', onCropMove);
     window.addEventListener('pointerup', onCropEnd);
+    window.addEventListener('pointercancel', onCropEnd);
   };
 
   const onCropMove = (e: PointerEvent) => {
@@ -174,6 +175,7 @@ export default function PresetsTab({ config, addPresetTemplate, updatePresetTemp
     cropDrag.current = null;
     window.removeEventListener('pointermove', onCropMove);
     window.removeEventListener('pointerup', onCropEnd);
+    window.removeEventListener('pointercancel', onCropEnd);
   };
 
   const applyCrop = () => {
@@ -533,7 +535,7 @@ export default function PresetsTab({ config, addPresetTemplate, updatePresetTemp
 
                     {/* Bounding Box Potongan */}
                     <div
-                      className="absolute border-[1.5px] border-blue-500 pointer-events-auto cursor-move flex items-center justify-center group"
+                      className="absolute border-[1.5px] border-blue-500 pointer-events-auto cursor-move flex items-center justify-center group select-none touch-none"
                       style={{ top: `${crop.top}%`, left: `${crop.left}%`, width: `${crop.width}%`, height: `${crop.height}%` }}
                       onPointerDown={(e) => onCropStart(e, 'move')}
                     >
@@ -543,11 +545,31 @@ export default function PresetsTab({ config, addPresetTemplate, updatePresetTemp
                          <div className="border-r border-white/40"></div><div className="border-r border-white/40"></div><div></div>
                       </div>
 
-                      {/* Handles */}
-                      <div className="absolute w-4 h-4 bg-white border-2 border-blue-500 -top-2 -left-2 cursor-nwse-resize rounded-full shadow-sm" onPointerDown={(e) => onCropStart(e, 'nw')} />
-                      <div className="absolute w-4 h-4 bg-white border-2 border-blue-500 -top-2 -right-2 cursor-nesw-resize rounded-full shadow-sm" onPointerDown={(e) => onCropStart(e, 'ne')} />
-                      <div className="absolute w-4 h-4 bg-white border-2 border-blue-500 -bottom-2 -left-2 cursor-nesw-resize rounded-full shadow-sm" onPointerDown={(e) => onCropStart(e, 'sw')} />
-                      <div className="absolute w-4 h-4 bg-white border-2 border-blue-500 -bottom-2 -right-2 cursor-nwse-resize rounded-full shadow-sm" onPointerDown={(e) => onCropStart(e, 'se')} />
+                      {/* Handles with expanded touch area for mobile/tablet fingers */}
+                      <div 
+                        className="absolute w-8 h-8 -top-4 -left-4 flex items-center justify-center cursor-nwse-resize select-none touch-none active:scale-110 transition-transform" 
+                        onPointerDown={(e) => onCropStart(e, 'nw')}
+                      >
+                        <div className="w-4 h-4 bg-white border-2 border-blue-500 rounded-full shadow-sm pointer-events-none" />
+                      </div>
+                      <div 
+                        className="absolute w-8 h-8 -top-4 -right-4 flex items-center justify-center cursor-nesw-resize select-none touch-none active:scale-110 transition-transform" 
+                        onPointerDown={(e) => onCropStart(e, 'ne')}
+                      >
+                        <div className="w-4 h-4 bg-white border-2 border-blue-500 rounded-full shadow-sm pointer-events-none" />
+                      </div>
+                      <div 
+                        className="absolute w-8 h-8 -bottom-4 -left-4 flex items-center justify-center cursor-nesw-resize select-none touch-none active:scale-110 transition-transform" 
+                        onPointerDown={(e) => onCropStart(e, 'sw')}
+                      >
+                        <div className="w-4 h-4 bg-white border-2 border-blue-500 rounded-full shadow-sm pointer-events-none" />
+                      </div>
+                      <div 
+                        className="absolute w-8 h-8 -bottom-4 -right-4 flex items-center justify-center cursor-nwse-resize select-none touch-none active:scale-110 transition-transform" 
+                        onPointerDown={(e) => onCropStart(e, 'se')}
+                      >
+                        <div className="w-4 h-4 bg-white border-2 border-blue-500 rounded-full shadow-sm pointer-events-none" />
+                      </div>
                     </div>
                   </div>
                 )}

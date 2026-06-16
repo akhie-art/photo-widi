@@ -56,27 +56,57 @@ export default function OperatorDashboard() {
   useEffect(() => {
     if (typeof window === "undefined") return;
     
+    let mounted = true;
+
     const checkAuth = async () => {
       try {
-        const { data: { user } } = await supabase.auth.getUser();
-        const role = user?.user_metadata?.role;
-        const displayName = user?.user_metadata?.display_name || "Operator";
+        const { data: { session } } = await supabase.auth.getSession();
+        
+        if (session) {
+          const role = session.user?.user_metadata?.role;
+          const displayName = session.user?.user_metadata?.display_name || "Operator";
 
-        if (user && role === "operator") {
-          setCurrentOperator(displayName);
-          sessionStorage.setItem("glow_operator_auth", "true");
-          sessionStorage.setItem("glow_operator_name", displayName);
+          if (role === "operator") {
+            if (mounted) {
+              setCurrentOperator(displayName);
+              sessionStorage.setItem("glow_operator_auth", "true");
+              sessionStorage.setItem("glow_operator_name", displayName);
+            }
+          } else {
+            if (mounted) {
+              sessionStorage.removeItem("glow_operator_auth");
+              sessionStorage.removeItem("glow_operator_name");
+              router.replace("/login");
+            }
+            return;
+          }
         } else {
-          sessionStorage.removeItem("glow_operator_auth");
-          sessionStorage.removeItem("glow_operator_name");
-          router.replace("/login");
+          if (mounted) {
+            sessionStorage.removeItem("glow_operator_auth");
+            sessionStorage.removeItem("glow_operator_name");
+            router.replace("/login");
+          }
           return;
         }
       } catch (err) {
         console.error("Operator auth check failed:", err);
-        router.replace("/login");
-        return;
+        const operatorAuthFlag = sessionStorage.getItem("glow_operator_auth");
+        const displayName = sessionStorage.getItem("glow_operator_name") || "Operator";
+        if (operatorAuthFlag === "true" && displayName) {
+          if (mounted) {
+            setCurrentOperator(displayName);
+          }
+        } else {
+          if (mounted) {
+            sessionStorage.removeItem("glow_operator_auth");
+            sessionStorage.removeItem("glow_operator_name");
+            router.replace("/login");
+          }
+          return;
+        }
       }
+
+      if (!mounted) return;
 
       // Theme initialization
       const isDark = document.documentElement.classList.contains("dark");
@@ -94,6 +124,10 @@ export default function OperatorDashboard() {
     };
 
     checkAuth();
+
+    return () => {
+      mounted = false;
+    };
   }, [router]);
 
   // Hardware Initialization

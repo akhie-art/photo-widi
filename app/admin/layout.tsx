@@ -51,25 +51,50 @@ export default function AdminLayout({
   useEffect(() => {
     if (typeof window === "undefined") return;
 
+    let mounted = true;
+
     const checkAuth = async () => {
       try {
-        const { data: { user } } = await supabase.auth.getUser();
-        const role = user?.user_metadata?.role;
+        const { data: { session } } = await supabase.auth.getSession();
         
-        if (user && role === "admin") {
-          setAuthorized(true);
-          sessionStorage.setItem("glow_admin_auth", "true");
+        if (session) {
+          const role = session.user?.user_metadata?.role;
+          if (role === "admin") {
+            if (mounted) {
+              setAuthorized(true);
+              sessionStorage.setItem("glow_admin_auth", "true");
+            }
+          } else {
+            if (mounted) {
+              sessionStorage.removeItem("glow_admin_auth");
+              router.replace("/login");
+            }
+          }
         } else {
-          sessionStorage.removeItem("glow_admin_auth");
-          router.replace("/login");
+          if (mounted) {
+            sessionStorage.removeItem("glow_admin_auth");
+            router.replace("/login");
+          }
         }
       } catch (err) {
         console.error("Auth check failed:", err);
-        router.replace("/login");
+        const adminAuthFlag = sessionStorage.getItem("glow_admin_auth");
+        if (adminAuthFlag === "true") {
+          if (mounted) setAuthorized(true);
+        } else {
+          if (mounted) {
+            sessionStorage.removeItem("glow_admin_auth");
+            router.replace("/login");
+          }
+        }
       }
     };
 
     checkAuth();
+
+    return () => {
+      mounted = false;
+    };
   }, [router]);
 
   // Determine current active page
