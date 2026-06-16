@@ -25,7 +25,7 @@ export default function OperatorDashboard() {
   // Form Fields State
   const [customerName, setCustomerNameState] = useState("");
   const [customerPhone, setCustomerPhoneState] = useState("");
-  const [sessionsCount, setSessionsCountState] = useState(1);
+  const [sessionsCount, setSessionsCountState] = useState<number | "">("");
 
   // Hardware State
   const [cameras, setCameras] = useState<MediaDeviceInfo[]>([]);
@@ -47,7 +47,7 @@ export default function OperatorDashboard() {
     if (typeof window !== "undefined") sessionStorage.setItem("glow_customer_phone", val);
   };
 
-  const setSessionsCount = (val: number) => {
+  const setSessionsCount = (val: number | "") => {
     setSessionsCountState(val);
     if (typeof window !== "undefined") sessionStorage.setItem("glow_sessions_count", String(val));
   };
@@ -120,7 +120,10 @@ export default function OperatorDashboard() {
       if (savedPhone) setCustomerPhoneState(savedPhone);
       
       const savedSessions = sessionStorage.getItem("glow_sessions_count");
-      if (savedSessions) setSessionsCountState(Number(savedSessions));
+      if (savedSessions) {
+        const val = Number(savedSessions);
+        setSessionsCountState(val > 0 ? val : "");
+      }
     };
 
     checkAuth();

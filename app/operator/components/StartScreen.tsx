@@ -14,8 +14,8 @@ interface StartScreenProps {
   setCustomerName: (v: string) => void;
   customerPhone: string;
   setCustomerPhone: (v: string) => void;
-  sessionsCount: number;
-  setSessionsCount: (v: number) => void;
+  sessionsCount: number | "";
+  setSessionsCount: (v: number | "") => void;
 }
 
 export default function StartScreen({
@@ -33,6 +33,13 @@ export default function StartScreen({
 }: StartScreenProps) {
   const canStart = customerName.trim() !== "" && customerPhone.trim() !== "";
   const [showError, setShowError] = useState(false);
+
+  // Manage sessionsCount text input state locally to allow smooth backspacing/typing
+  const [localSessions, setLocalSessions] = useState(sessionsCount.toString());
+
+  useEffect(() => {
+    setLocalSessions(sessionsCount.toString());
+  }, [sessionsCount]);
 
   // Automatically clear error when form becomes valid
   useEffect(() => {
@@ -125,13 +132,36 @@ export default function StartScreen({
           <div className="relative flex items-center">
             <Layers className="w-4 h-4 text-zinc-400 dark:text-zinc-550 absolute left-3.5 pointer-events-none" strokeWidth={1.5} />
             <input
-              type="number"
-              min={1}
+              type="text"
+              pattern="[0-9]*"
+              inputMode="numeric"
               required
-              value={sessionsCount || ""}
+              value={localSessions}
               onChange={(e) => {
-                const val = Number(e.target.value);
-                setSessionsCount(val > 0 ? val : 1);
+                const rawVal = e.target.value;
+                const cleanVal = rawVal.replace(/[^0-9]/g, '');
+                setLocalSessions(cleanVal);
+                
+                if (cleanVal === '') {
+                  setSessionsCount("");
+                } else {
+                  const val = Number(cleanVal);
+                  if (val > 0) {
+                    setSessionsCount(val);
+                  }
+                }
+              }}
+              onBlur={() => {
+                if (localSessions !== "") {
+                  const val = Number(localSessions);
+                  if (val <= 0) {
+                    setLocalSessions("");
+                    setSessionsCount("");
+                  } else {
+                    setLocalSessions(val.toString());
+                    setSessionsCount(val);
+                  }
+                }
               }}
               placeholder="1"
               className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-800 dark:text-zinc-200 focus:outline-none focus:border-zinc-950 dark:focus:border-zinc-100 focus:ring-2 focus:ring-zinc-900/5 dark:focus:ring-zinc-100/5 text-xs py-3 pr-3 pl-10.5 rounded-xl w-full transition-all placeholder:text-zinc-400 dark:placeholder:text-zinc-600"

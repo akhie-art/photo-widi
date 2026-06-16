@@ -139,7 +139,7 @@ begin
     created_at,
     updated_at
   ) values (
-    new_id::text,
+    new_id,
     new_id,
     json_build_object('sub', new_id::text, 'email', p_email)::jsonb,
     'email',
