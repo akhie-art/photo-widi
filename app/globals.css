@@ -128,3 +128,14 @@
     @apply font-sans;
   }
 }
+
+.bg-checkered {
+  background-color: #ffffff;
+  background-image: conic-gradient(#f4f4f5 25%, white 0 50%, #f4f4f5 0 75%, white 0);
+  background-size: 20px 20px;
+}
+.dark .bg-checkered {
+  background-color: #121214;
+  background-image: conic-gradient(#27272a 25%, #121214 0 50%, #27272a 0 75%, #121214 0);
+  background-size: 20px 20px;
+}

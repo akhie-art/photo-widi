@@ -1,17 +1,22 @@
 "use client";
 
+/* eslint-disable react-hooks/set-state-in-effect */
+
 import { useState, useEffect, useRef } from "react";
-import { usePhotoboothStore, FrameTemplate, PlacedSticker } from "../../hooks/usePhotoboothStore";
+import { usePhotoboothStore, PresetTemplate, PlacedSticker } from "../../hooks/usePhotoboothStore";
+import { supabase } from "@/lib/supabase";
 import { renderPhotoStrip } from "../../utils/canvasRenderer";
 import { playBeep, playShutterSound } from "../../utils/audio";
 import { useRouter, useParams } from "next/navigation";
-import { Sun, Moon } from "lucide-react";
+import { Sun, Moon, Sparkles, Heart, Star, Camera } from "lucide-react";
+import { toast } from "sonner";
 
 
 import CaptureScreen from "../components/CaptureScreen";
 import PreviewScreen from "../components/PreviewScreen";
 import PaymentScreen from "../components/PaymentScreen";
 import SessionSetupScreen from "../components/SessionSetupScreen";
+import ShareScreen from "../components/ShareScreen";
 
 const FILTERS = [
   { id: "original", name: "Original", css: "none" },
@@ -43,8 +48,9 @@ export default function CustomerBoothSession() {
   const params = useParams();
   const slug = Array.isArray(params?.slug) ? params.slug[0] : params?.slug;
 
-  const [step, setStep] = useState<"start" | "payment" | "setup" | "capture" | "preview">("payment");
+  const [step, setStep] = useState<"start" | "payment" | "setup" | "capture" | "preview" | "share">("payment");
   const [theme, setTheme] = useState<"dark" | "light">("dark");
+  const [authorized, setAuthorized] = useState(false);
 
   const [activeLayout, setActiveLayout] = useState<"strip" | "grid" | "polaroid">("strip");
   const [activeFilter, setActiveFilter] = useState(FILTERS[0]);
@@ -75,28 +81,68 @@ export default function CustomerBoothSession() {
   const [isRendering, setIsRendering] = useState(false);
   const [customText, setCustomText] = useState("");
   const [placedStickers, setPlacedStickers] = useState<PlacedSticker[]>([]);
+  const handleAddSticker = (stickerId: string) => {
+    /* eslint-disable-next-line react-hooks/purity */
+    const stickerIdStr = "placed_" + Date.now();
+    const newSticker: PlacedSticker = {
+      id: stickerIdStr,
+      stickerId,
+      xPct: 50,
+      yPct: 45,
+      scalePct: 20,
+      rotation: 0,
+    };
+    setPlacedStickers((prev) => [...prev, newSticker]);
+  };
+  const handleUpdateSticker = (id: string, fields: Partial<PlacedSticker>) => {
+    setPlacedStickers((prev) =>
+      prev.map((s) => (s.id === id ? { ...s, ...fields } : s))
+    );
+  };
+  const handleDeleteSticker = (id: string) => {
+    setPlacedStickers((prev) => prev.filter((s) => s.id !== id));
+  };
+  const [lastSavedPhotoId, setLastSavedPhotoId] = useState<string | null>(null);
 
   // Customer registration state
   const [customerName, setCustomerNameState] = useState("");
   const [customerPhone, setCustomerPhoneState] = useState("");
   const [sessionsCount, setSessionsCountState] = useState(1);
   const [currentSessionNum, setCurrentSessionNum] = useState(1);
+  const [paymentMethod, setPaymentMethod] = useState<"qris" | "cash" | null>(null);
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const skipNextStopRef = useRef(false);
 
-  // Sync theme status on mount
+  // Initialization & Auth Guard (Secure Supabase Auth check)
   useEffect(() => {
     if (typeof window === "undefined") return;
+
+    const checkAuth = async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        const role = user?.user_metadata?.role;
+        if (user && role === "operator") {
+          setAuthorized(true);
+        } else {
+          router.replace("/login");
+        }
+      } catch (err) {
+        console.error("Session page auth check failed:", err);
+        router.replace("/login");
+      }
+    };
+    checkAuth();
+
     const isDark = document.documentElement.classList.contains("dark");
     setTheme(isDark ? "dark" : "light");
-  }, []);
+  }, [router]);
 
   const toggleTheme = () => {
     const newTheme = theme === "dark" ? "light" : "dark";
     setTheme(newTheme);
-    localStorage.setItem("glow_theme", newTheme);
+    sessionStorage.setItem("glow_theme", newTheme);
     const root = document.documentElement;
     if (newTheme === "dark") {
       root.classList.add("dark");
@@ -131,13 +177,17 @@ export default function CustomerBoothSession() {
     setCapturedPhotosState((prev) => {
       const next = typeof val === "function" ? val(prev) : val;
       if (typeof window !== "undefined") {
-        sessionStorage.setItem("glow_captured_photos", JSON.stringify(next));
+        try {
+          sessionStorage.setItem("glow_captured_photos", JSON.stringify(next));
+        } catch (err) {
+          console.warn("[Storage] Failed to save glow_captured_photos to sessionStorage:", err);
+        }
       }
       return next;
     });
   };
 
-  const changeStep = (newStep: "start" | "payment" | "setup" | "capture" | "preview") => {
+  const changeStep = (newStep: "start" | "payment" | "setup" | "capture" | "preview" | "share") => {
     if (newStep === "start") {
       router.push("/operator");
       return;
@@ -185,28 +235,10 @@ export default function CustomerBoothSession() {
     }
 
     const savedPresetId = sessionStorage.getItem("glow_selected_preset_id");
-    if (savedPresetId && config && config.presetTemplates) {
-      const preset = config.presetTemplates.find(p => p.id === savedPresetId);
+    if (savedPresetId && config) {
+      const preset = config.presetTemplates?.find(p => p.id === savedPresetId);
       if (preset) {
-        const layoutKey = preset.layoutId.replace("layout_", "") as "strip" | "grid" | "polaroid";
-        if (["strip", "grid", "polaroid"].includes(layoutKey)) {
-          setActiveLayout(layoutKey);
-        }
-        setActiveFrameId(preset.frameId ?? preset.id);
-        
-        // Find custom or standard filter
-        const customFilter = config.customFilters?.find(f => f.id === preset.filterId);
-        if (customFilter) {
-          const filterObj = FILTERS.find(f => f.id === customFilter.id) || {
-            id: customFilter.id,
-            name: customFilter.name,
-            css: customFilter.css
-          };
-          setActiveFilter(filterObj);
-        } else {
-          const filterObj = FILTERS.find(f => f.id === preset.filterId) || FILTERS[0];
-          setActiveFilter(filterObj);
-        }
+        setActiveFrameId(preset.id);
       }
     }
   }, [config]);
@@ -217,7 +249,7 @@ export default function CustomerBoothSession() {
 
     const syncStepFromUrl = () => {
       const params = new URLSearchParams(window.location.search);
-      const urlStep = params.get("step") as "start" | "payment" | "setup" | "capture" | "preview" | null;
+      const urlStep = params.get("step") as "start" | "payment" | "setup" | "capture" | "preview" | "share" | null;
       
       if (slug) {
         const name = sessionStorage.getItem("glow_customer_name") || "";
@@ -229,10 +261,10 @@ export default function CustomerBoothSession() {
         if (!name || !phone) {
           router.replace("/operator");
         } else if (urlStep === "preview" && photos.length === 0) {
-          changeStep("setup");
+          changeStep("capture");
         } else if (urlStep === "start") {
           router.replace("/operator");
-        } else if (urlStep && ["payment", "setup", "capture", "preview"].includes(urlStep)) {
+        } else if (urlStep && ["payment", "capture", "preview", "share"].includes(urlStep)) {
           setStep(urlStep);
         } else {
           changeStep("payment");
@@ -249,65 +281,69 @@ export default function CustomerBoothSession() {
   }, [slug]);
 
   // Filter lists based on admin global rules & custom filters
-  const activeFiltersList = [
-    ...FILTERS,
-    ...(config.customFilters || []).map(cf => ({ id: cf.id, name: cf.name, css: cf.css }))
-  ].filter((f, idx, self) => self.findIndex(x => x.id === f.id) === idx)
-   .filter((f) => config.allowedFilters ? config.allowedFilters.includes(f.id) : true);
+  const activeFiltersList = (config.customFilters || [])
+    .filter((f) => {
+      if (!config.allowedFilters || config.allowedFilters.length === 0 || (config.allowedFilters.length === 1 && config.allowedFilters[0] === "original")) {
+        return true;
+      }
+      return config.allowedFilters.includes(f.id);
+    });
 
   // Layout lists based on admin global rules & custom layouts
-  const activeLayoutsList = [
-    ...LAYOUTS,
-    ...(config.customLayouts || []).map(cl => {
-      const key = cl.id.replace("layout_", "");
-      return { id: key, name: cl.name, description: cl.description, count: cl.count };
-    })
-  ].filter((l, idx, self) => self.findIndex(x => x.id === l.id) === idx)
-   .filter((l) => config.allowedLayouts ? config.allowedLayouts.includes(l.id) : true);
+  // Layout lists based on admin global rules
+  const activeLayoutsList = LAYOUTS.filter((l) => {
+    if (!config.allowedLayouts || config.allowedLayouts.length === 0 || (config.allowedLayouts.length === 1 && config.allowedLayouts[0] === "strip")) {
+      return true;
+    }
+    return config.allowedLayouts.includes(l.id);
+  });
 
-  const savedPresetId = typeof window !== "undefined" ? sessionStorage.getItem("glow_selected_preset_id") : null;
-  const activePreset = config.presetTemplates?.find(p => p.id === savedPresetId);
-  const isLayoutLocked = activePreset?.forceLayout ?? false;
+
 
   // Identify currently active preset template
-  const selectedFrameTemplate = config.presetTemplates?.find((p) => p.id === activeFrameId) || config.presetTemplates?.find((p) => p.id === config.activePresetTemplateId) || config.presetTemplates?.[0] || {
-    id: "default",
-    name: "Default Neon",
-    frameStyle: config.frameStyle || "neon",
-    frameText: config.frameText || "MEMORIES",
-  };
+  const selectedFrameTemplate =
+    config.presetTemplates?.find((p) => p.id === activeFrameId) ||
+    config.presetTemplates?.find((p) => p.id === config.activePresetTemplateId) ||
+    config.presetTemplates?.[0] || {
+      id: "default",
+      name: "Default Neon",
+      frameStyle: config.frameStyle || "neon",
+      frameText: config.frameText || "MEMORIES",
+    };
 
   // Sync customizable frame elements
   useEffect(() => {
     if (config) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setIsMirrored(config.mirrorDefault ?? true);
       
-      // Auto-initialize activeFrameId (prefer saved session preset first, fallback to active template)
-      if (!activeFrameId && config.presetTemplates && config.presetTemplates.length > 0) {
-        const savedPresetId = typeof window !== "undefined" ? sessionStorage.getItem("glow_selected_preset_id") : null;
-        const initialPresetId = 
-          config.presetTemplates.find(p => p.id === savedPresetId)?.id || 
-          config.presetTemplates.find(p => p.id === config.activePresetTemplateId)?.id || 
-          config.presetTemplates[0].id;
-        
-        if (initialPresetId) {
-          setActiveFrameId(initialPresetId);
-          const activeTemplate = config.presetTemplates.find((p) => p.id === initialPresetId);
-          if (activeTemplate) {
-            setCustomText(activeTemplate.frameText);
-          }
+      // Auto-initialize activeFrameId (prefer admin active template first, fallback to first preset)
+      // Auto-initialize activeFrameId (prefer admin active template first, fallback to first preset)
+      const initialPresetId = config.activePresetTemplateId || (config.presetTemplates && config.presetTemplates[0]?.id) || "";
+      if (initialPresetId && !activeFrameId) {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        setActiveFrameId(initialPresetId);
+        const activeTemplate = config.presetTemplates?.find((p) => p.id === initialPresetId);
+        if (activeTemplate) {
+          // eslint-disable-next-line react-hooks/set-state-in-effect
+          setCustomText(config.frameText || activeTemplate.name || "");
         }
       }
 
       // Auto fallback active options if current options are disabled by admin
-      if (config.allowedLayouts && !config.allowedLayouts.includes(activeLayout) && config.allowedLayouts.length > 0) {
-        setActiveLayout(config.allowedLayouts[0] as any);
+      const hasLayoutRestrictions = config.allowedLayouts && config.allowedLayouts.length > 0 && !(config.allowedLayouts.length === 1 && config.allowedLayouts[0] === "strip");
+      if (hasLayoutRestrictions && !config.allowedLayouts.includes(activeLayout)) {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        setActiveLayout(config.allowedLayouts[0] as "strip" | "grid" | "polaroid");
       }
-      if (config.allowedFilters && !config.allowedFilters.includes(activeFilter.id) && config.allowedFilters.length > 0) {
-        const fallbackFilter = FILTERS.find((f) => f.id === config.allowedFilters[0]) || FILTERS[0];
+      const hasFilterRestrictions = config.allowedFilters && config.allowedFilters.length > 0 && !(config.allowedFilters.length === 1 && config.allowedFilters[0] === "original");
+      if (hasFilterRestrictions && !config.allowedFilters.includes(activeFilter.id)) {
+        const fallbackFilter = config.customFilters?.find((f) => f.id === config.allowedFilters[0]) || FILTERS.find((f) => f.id === config.allowedFilters[0]) || FILTERS[0];
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setActiveFilter(fallbackFilter);
       }
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [config, activeLayout, activeFilter, activeFrameId]);
 
   // Sync initial countdownDuration once from config when loaded
@@ -321,10 +357,12 @@ export default function CustomerBoothSession() {
   // Synchronize activeFrameId with the admin's selection on the Start Screen
   useEffect(() => {
     if (step === "start" && config.activePresetTemplateId) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setActiveFrameId(config.activePresetTemplateId);
       const activeTemplate = config.presetTemplates?.find((p) => p.id === config.activePresetTemplateId);
       if (activeTemplate) {
-        setCustomText(activeTemplate.frameText);
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        setCustomText(config.frameText || activeTemplate.name || "");
       }
     }
   }, [config.activePresetTemplateId, step]);
@@ -349,29 +387,7 @@ export default function CustomerBoothSession() {
     getCameras();
   }, []);
 
-  // Handle webcam streaming when starting/stopping capture session
-  useEffect(() => {
-    if (step === "capture") {
-      // Avoid restarting the camera if the stream is already active for the selected camera
-      const activeTrack = streamRef.current?.getVideoTracks()[0];
-      const activeDeviceId = activeTrack?.getSettings()?.deviceId;
-      
-      if (streamRef.current && streamRef.current.active && activeDeviceId && selectedCameraId && activeDeviceId === selectedCameraId) {
-        return;
-      }
-      startCamera();
-    } else {
-      stopCamera();
-    }
 
-    return () => {
-      if (skipNextStopRef.current) {
-        skipNextStopRef.current = false;
-      } else {
-        stopCamera();
-      }
-    };
-  }, [step, selectedCameraId]);
 
   const startCamera = async () => {
     stopCamera();
@@ -416,7 +432,7 @@ export default function CustomerBoothSession() {
       }
     } catch (err) {
       console.error("Webcam open failed:", err);
-      alert("Gagal mengakses kamera. Mohon izinkan akses kamera di browser Anda.");
+      toast.error("Gagal mengakses kamera. Mohon izinkan akses kamera di browser Anda.");
       router.push("/operator");
     }
   };
@@ -431,11 +447,38 @@ export default function CustomerBoothSession() {
     }
   };
 
+  // Handle webcam streaming when starting/stopping capture session
+  useEffect(() => {
+    if (step === "capture") {
+      // Avoid restarting the camera if the stream is already active for the selected camera
+      const activeTrack = streamRef.current?.getVideoTracks()[0];
+      const activeDeviceId = activeTrack?.getSettings()?.deviceId;
+      
+      if (streamRef.current && streamRef.current.active && activeDeviceId && selectedCameraId && activeDeviceId === selectedCameraId) {
+        return;
+      }
+      startCamera();
+    } else {
+      stopCamera();
+    }
+
+    return () => {
+      if (skipNextStopRef.current) {
+        skipNextStopRef.current = false;
+      } else {
+        stopCamera();
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step, selectedCameraId]);
+
   const startCaptureSequence = async () => {
     if (isCapturing) return;
 
     const layoutObj = LAYOUTS.find((l) => l.id === activeLayout) || LAYOUTS[0];
-    const totalPhotos = selectedFrameTemplate?.customSlots?.length ?? layoutObj.count;
+    const totalPhotos = (selectedFrameTemplate?.customSlots && selectedFrameTemplate.customSlots.length > 1)
+      ? selectedFrameTemplate.customSlots.length
+      : layoutObj.count;
     
     // Find first empty slot (where photo is empty/falsy)
     let activeSlotIndex = -1;
@@ -464,7 +507,9 @@ export default function CustomerBoothSession() {
 
     const duration = countdownDuration;
     const layoutObj = LAYOUTS.find((l) => l.id === activeLayout) || LAYOUTS[0];
-    const totalPhotos = selectedFrameTemplate?.customSlots?.length ?? layoutObj.count;
+    const totalPhotos = (selectedFrameTemplate?.customSlots && selectedFrameTemplate.customSlots.length > 1)
+      ? selectedFrameTemplate.customSlots.length
+      : layoutObj.count;
     
     const poseGuide = isRetake 
       ? `Ulangi Foto Slot ${slotIndex + 1}`
@@ -490,11 +535,6 @@ export default function CustomerBoothSession() {
     setCountdown(null);
     setPoseAlert(null);
     setIsCapturing(false);
-
-    if (!isRetake && slotIndex + 1 === totalPhotos) {
-      await delay(1000);
-      changeStep("preview");
-    }
   };
 
   const captureSingleFrame = (slotIndex?: number) => {
@@ -514,7 +554,7 @@ export default function CustomerBoothSession() {
 
       ctx.filter = activeFilter.css;
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-      const dataUrl = canvas.toDataURL("image/png");
+      const dataUrl = canvas.toDataURL("image/jpeg", 0.85);
 
       setCapturedPhotos((prev) => {
         const next = [...prev];
@@ -537,20 +577,13 @@ export default function CustomerBoothSession() {
     captureSingleSlot(slotIndex, true);
   };
 
-  useEffect(() => {
-    if (step === "preview" && capturedPhotos.length > 0) {
-      generateFinalStrip();
-    }
-  }, [step, capturedPhotos, activeLayout, config, customText, activeFrameId]);
-
   const generateFinalStrip = async () => {
     setIsRendering(true);
     try {
       const activeConfig = {
         ...config,
         activeFrameId: activeFrameId, // Pass customer selected template frame id
-        frameStyle: selectedFrameTemplate.frameStyle,
-        frameText: customText || selectedFrameTemplate.frameText,
+        frameText: customText || config.frameText,
       };
       const result = await renderPhotoStrip({
         photos: capturedPhotos,
@@ -565,6 +598,14 @@ export default function CustomerBoothSession() {
     }
   };
 
+  useEffect(() => {
+    if (step === "preview" && capturedPhotos.length > 0) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      generateFinalStrip();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step, capturedPhotos, activeLayout, config, customText, activeFrameId]);
+
   const handleDownload = async () => {
     if (!compiledStripUrl) return;
     setIsRendering(true);
@@ -572,8 +613,7 @@ export default function CustomerBoothSession() {
       const activeConfig = {
         ...config,
         activeFrameId: activeFrameId,
-        frameStyle: selectedFrameTemplate.frameStyle,
-        frameText: customText || selectedFrameTemplate.frameText,
+        frameText: customText || config.frameText,
       };
       
       // Compile composite strip including interactive stickers
@@ -584,51 +624,229 @@ export default function CustomerBoothSession() {
         placedStickers: placedStickers,
       });
 
-      const link = document.createElement("a");
-      link.download = `${config.eventName.replace(/\s+/g, "_")}_session_${currentSessionNum}.png`;
-      link.href = compositeUrl;
-      link.click();
+      setCompiledStripUrl(compositeUrl);
+
+      const operatorName = typeof window !== "undefined" ? sessionStorage.getItem("glow_operator_name") || undefined : undefined;
+      const photoId = await addPhoto(compositeUrl, {
+        customerName,
+        customerPhone,
+        sessionsCount: 1,
+        operatorName,
+        capturedPhotos,
+        paymentMethod: paymentMethod || undefined,
+        amount: config.pricePerSession ?? 25000,
+      });
       
+      setLastSavedPhotoId(photoId || null);
+      changeStep("share");
+    } catch (e) {
+      console.error("Composite render error:", e);
+      toast.error("Gagal merakit foto strip.");
+    } finally {
+      setIsRendering(false);
+    }
+  };
+
+  const handlePrint = async () => {
+    if (!compiledStripUrl) return;
+    setIsRendering(true);
+    try {
+      const activeConfig = {
+        ...config,
+        activeFrameId: activeFrameId,
+        frameText: customText || config.frameText,
+      };
+      
+      // Compile composite strip including interactive stickers
+      const compositeUrl = await renderPhotoStrip({
+        photos: capturedPhotos,
+        layout: activeLayout,
+        config: activeConfig,
+        placedStickers: placedStickers,
+      });
+
+      // Open print window
+      const printWindow = window.open("", "_blank");
+      if (printWindow) {
+        printWindow.document.write(`
+          <html>
+            <head>
+              <title>Print Photo Strip</title>
+              <style>
+                body {
+                  margin: 0;
+                  display: flex;
+                  justify-content: center;
+                  align-items: center;
+                  background-color: white;
+                  height: 100vh;
+                }
+                img {
+                  max-width: 100%;
+                  max-height: 100vh;
+                  object-fit: contain;
+                }
+                @page {
+                  margin: 0;
+                  size: auto;
+                }
+                @media print {
+                  body {
+                    background-color: white;
+                  }
+                  img {
+                    max-width: 100%;
+                    max-height: 100vh;
+                  }
+                }
+              </style>
+            </head>
+            <body>
+              <img src="${compositeUrl}" onload="window.print(); window.close();" />
+            </body>
+          </html>
+        `);
+        printWindow.document.close();
+      }
+
       // Save composite to gallery
       const operatorName = typeof window !== "undefined" ? sessionStorage.getItem("glow_operator_name") || undefined : undefined;
-      await addPhoto(compositeUrl, { customerName, customerPhone, sessionsCount: 1, operatorName });
+      await addPhoto(compositeUrl, {
+        customerName,
+        customerPhone,
+        sessionsCount: 1,
+        operatorName,
+        capturedPhotos,
+        paymentMethod: paymentMethod || undefined,
+        amount: config.pricePerSession ?? 25000,
+      });
       
       if (currentSessionNum < sessionsCount) {
         setCurrentSessionNum(prev => prev + 1);
         setCapturedPhotos([]);
         setPlacedStickers([]);
         setCompiledStripUrl(null);
-        changeStep("setup");
+        changeStep("capture");
       } else {
         clearSessionData();
         router.push("/operator");
       }
     } catch (e) {
-      console.error("Composite render error:", e);
-      alert("Gagal merakit foto strip.");
+      console.error("Print error:", e);
+      toast.error("Gagal mencetak foto.");
     } finally {
       setIsRendering(false);
     }
   };
 
-  const handleFrameSelect = (preset: any) => {
-    setActiveFrameId(preset.id);
-    setCustomText(preset.frameText || preset.name || "");
-    if (preset.layoutId) {
-      const layoutKey = preset.layoutId.replace("layout_", "") as "strip" | "grid" | "polaroid";
-      if (["strip", "grid", "polaroid"].includes(layoutKey)) {
-        setActiveLayout(layoutKey);
+  const handleShareComplete = async () => {
+    setIsRendering(true);
+    try {
+      if (currentSessionNum < sessionsCount) {
+        setCurrentSessionNum(prev => prev + 1);
+        setCapturedPhotos([]);
+        setPlacedStickers([]);
+        setCompiledStripUrl(null);
+        setLastSavedPhotoId(null);
+        changeStep("capture");
+      } else {
+        clearSessionData();
+        router.push("/operator");
+      }
+    } catch (e) {
+      console.error("Advance session error:", e);
+      toast.error("Gagal mengalihkan sesi.");
+    } finally {
+      setIsRendering(false);
+    }
+  };
+
+  const handleFrameSelect = (preset: PresetTemplate) => {
+    if (activeFrameId === preset.id) {
+      // Batal pilih template preset
+      setActiveFrameId("");
+      setCustomText("");
+      setActiveLayout("strip");
+      if (typeof window !== "undefined") {
+        sessionStorage.setItem("glow_selected_preset_id", "none");
+      }
+    } else {
+      setActiveFrameId(preset.id);
+      setCustomText(config.frameText || preset.name || "");
+      if (typeof window !== "undefined") {
+        sessionStorage.setItem("glow_selected_preset_id", preset.id);
+      }
+      // Auto-set activeLayout based on preset ID or customSlots count
+      if (preset.id.includes("grid")) {
+        setActiveLayout("grid");
+      } else if (preset.id.includes("polaroid") || (preset.customSlots && preset.customSlots.length === 1)) {
+        setActiveLayout("polaroid");
+      } else {
+        setActiveLayout("strip");
       }
     }
   };
 
   const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
+  if (!authorized) {
+    return (
+      <div className="min-h-screen bg-[#121214] flex flex-col items-center justify-center gap-4 text-zinc-400 font-mono text-xs">
+        <div className="w-8 h-8 rounded-full border-2 border-zinc-700 border-t-zinc-300 animate-spin" />
+        <span>Memverifikasi Sesi Pemotretan...</span>
+      </div>
+    );
+  }
+
   return (
-    <div className="flex-1 bg-[#fbfbfb] dark:bg-[#0b0b0c] text-zinc-850 dark:text-[#e3e3e3] font-sans flex flex-col justify-between overflow-x-hidden min-h-screen relative transition-colors duration-300">
-      {/* Visual Ambient Background Glows */}
-      <div className="absolute top-0 left-[-15%] w-[45%] aspect-square rounded-full bg-blue-500/5 blur-[120px] pointer-events-none z-0" />
-      <div className="absolute bottom-[10%] right-[-15%] w-[45%] aspect-square rounded-full bg-indigo-500/5 blur-[120px] pointer-events-none z-0" />
+    <div className="flex-1 bg-[#fbfbfb] dark:bg-[#0b0b0c] text-zinc-800 dark:text-[#e3e3e3] font-sans flex flex-col justify-between overflow-x-hidden min-h-screen relative transition-colors duration-300">
+      {/* Visual Ambient Background Glows - Happy & Cheerful Colors */}
+      <div className="absolute top-[-10%] left-[-10%] w-[50%] aspect-square rounded-full bg-amber-400/8 dark:bg-amber-500/5 blur-[120px] pointer-events-none z-0 animate-pulse" style={{ animationDuration: '8s' }} />
+      <div className="absolute bottom-[-10%] right-[-10%] w-[50%] aspect-square rounded-full bg-pink-400/8 dark:bg-pink-500/5 blur-[120px] pointer-events-none z-0 animate-pulse" style={{ animationDuration: '10s' }} />
+      <div className="absolute top-[20%] right-[-15%] w-[45%] aspect-square rounded-full bg-cyan-400/6 dark:bg-cyan-500/3 blur-[120px] pointer-events-none z-0" />
+      <div className="absolute bottom-[20%] left-[-15%] w-[45%] aspect-square rounded-full bg-purple-400/6 dark:bg-purple-500/3 blur-[120px] pointer-events-none z-0" />
+
+      {/* Floating Photobooth/Polaroid Illustrations & Playful Sparkles */}
+      <div className="absolute left-[5%] top-[20%] w-24 h-56 rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200/50 dark:border-zinc-800/50 shadow-xl rotate-[-12deg] p-2 flex flex-col gap-1.5 pointer-events-none select-none opacity-20 dark:opacity-10 hidden xl:flex z-0">
+        <div className="bg-zinc-50 dark:bg-zinc-950 aspect-[4/3] rounded-md flex items-center justify-center">
+          <Star className="w-4 h-4 text-amber-400 fill-amber-300 dark:fill-transparent" />
+        </div>
+        <div className="bg-zinc-50 dark:bg-zinc-950 aspect-[4/3] rounded-md flex items-center justify-center">
+          <Camera className="w-4 h-4 text-blue-400" />
+        </div>
+        <div className="bg-zinc-50 dark:bg-zinc-950 aspect-[4/3] rounded-md flex items-center justify-center">
+          <Heart className="w-4 h-4 text-pink-400 fill-pink-300 dark:fill-transparent" />
+        </div>
+        <div className="mt-auto text-center text-[6px] font-mono tracking-widest text-zinc-450 dark:text-zinc-500 uppercase font-bold">MEMORIES</div>
+      </div>
+
+      <div className="absolute right-[5%] top-[25%] w-28 h-32 rounded-lg bg-white dark:bg-zinc-900 border border-zinc-200/50 dark:border-zinc-800/50 shadow-xl rotate-[15deg] p-2 flex flex-col pointer-events-none select-none opacity-20 dark:opacity-10 hidden xl:flex z-0">
+        <div className="bg-zinc-50 dark:bg-zinc-950 w-full aspect-square rounded-md flex items-center justify-center">
+          <Sparkles className="w-5 h-5 text-purple-400" />
+        </div>
+        <div className="mt-auto text-center text-[8px] font-serif italic text-zinc-400 dark:text-zinc-500">smile!</div>
+      </div>
+
+      {/* Playful Floating Confetti & Sparkles */}
+      <div className="absolute left-[15%] top-[12%] pointer-events-none select-none opacity-25 dark:opacity-10 animate-bounce z-0" style={{ animationDuration: '4s' }}>
+        <Sparkles className="w-6 h-6 text-yellow-400 fill-yellow-100 dark:fill-transparent" />
+      </div>
+      <div className="absolute left-[4%] top-[55%] pointer-events-none select-none opacity-15 dark:opacity-5 animate-pulse z-0" style={{ animationDuration: '3s' }}>
+        <Heart className="w-8 h-8 text-pink-400 fill-pink-400" />
+      </div>
+      <div className="absolute left-[18%] top-[75%] pointer-events-none select-none opacity-20 dark:opacity-10 z-0">
+        <Camera className="w-7 h-7 text-blue-400" />
+      </div>
+
+      <div className="absolute right-[16%] top-[15%] pointer-events-none select-none opacity-25 dark:opacity-10 animate-pulse z-0" style={{ animationDuration: '5s' }}>
+        <Sparkles className="w-5 h-5 text-pink-400 fill-pink-100 dark:fill-transparent" />
+      </div>
+      <div className="absolute right-[4%] top-[60%] pointer-events-none select-none opacity-20 dark:opacity-8 animate-bounce z-0" style={{ animationDuration: '3.5s' }}>
+        <Star className="w-8 h-8 text-yellow-400 fill-yellow-400" />
+      </div>
+      <div className="absolute right-[18%] top-[78%] pointer-events-none select-none opacity-15 dark:opacity-8 z-0">
+        <Sparkles className="w-6 h-6 text-purple-400 fill-purple-100 dark:fill-transparent" />
+      </div>
 
       {/* Visual Flash Effect Overlay */}
       {flashActive && (
@@ -646,49 +864,58 @@ export default function CustomerBoothSession() {
           eventName={config.eventName}
           theme={theme}
           toggleTheme={toggleTheme}
-          selectedPresetId={activeFrameId}
+          selectedPresetId={config.presetTemplates?.some(p => p.id === activeFrameId) ? activeFrameId : ""}
           selectedFilterId={activeFilter.id}
-          selectedLayoutId={activeLayout}
-          onSelectPreset={(preset) => handleFrameSelect(preset)}
-          onSelectFilter={(filter) => setActiveFilter(filter)}
-          onSelectLayout={(layoutId) => setActiveLayout(layoutId as "strip" | "grid" | "polaroid")}
+          onSelectPreset={(preset) => {
+            if (activeFrameId === preset.id) {
+              if (typeof window !== "undefined") {
+                sessionStorage.setItem("glow_selected_preset_id", "none");
+              }
+              setActiveFrameId("");
+              setCustomText("");
+              setActiveLayout("strip");
+            } else {
+              if (typeof window !== "undefined") {
+                sessionStorage.setItem("glow_selected_preset_id", preset.id);
+              }
+              handleFrameSelect(preset);
+            }
+          }}
+          onSelectFilter={(filter) => {
+            if (activeFilter.id === filter.id) {
+              const originalFilter = config.customFilters?.find(f => f.id === "original") || FILTERS.find(f => f.id === "original") || FILTERS[0];
+              setActiveFilter(originalFilter);
+            } else {
+              setActiveFilter(filter);
+            }
+          }}
           availableFilters={activeFiltersList}
-          availableLayouts={activeLayoutsList}
           onContinue={() => changeStep("capture")}
         />
       )}
 
       {/* All other steps: centered padded layout */}
       {step !== "setup" && (
-        <div className="flex-1 flex flex-col items-center justify-center w-full z-10 relative">
+        <div className="flex-1 flex flex-col items-center justify-center w-full z-10 relative py-10 px-4">
           <main className="flex-1 flex flex-col items-center justify-center w-full relative">
 
             {slug && step === "payment" && (
               <>
-                {/* Top bar with theme toggle for payment step */}
-                <div className="mb-4 w-full max-w-md flex justify-end">
-                  <button
-                    type="button"
-                    onClick={toggleTheme}
-                    className="w-8 h-8 rounded-xl bg-white/80 dark:bg-zinc-900/60 hover:bg-zinc-100 dark:hover:bg-zinc-800 border border-zinc-200/80 dark:border-zinc-800/60 flex items-center justify-center transition-all cursor-pointer shadow-sm"
-                    title={theme === "dark" ? "Mode Terang" : "Mode Gelap"}
-                  >
-                    {theme === "dark" ? (
-                      <Sun className="w-3.5 h-3.5 text-amber-500" />
-                    ) : (
-                      <Moon className="w-3.5 h-3.5 text-indigo-500" />
-                    )}
-                  </button>
-                </div>
+
                 <PaymentScreen
                   customerName={customerName}
                   customerPhone={customerPhone}
                   sessionsCount={sessionsCount}
-                  onPaymentSuccess={() => changeStep("setup")}
+                  onPaymentSuccess={(method) => {
+                    setPaymentMethod(method);
+                    changeStep("capture");
+                  }}
                   onCancel={() => {
                     router.push("/operator");
                   }}
                   eventName={config.eventName}
+                  pricePerSession={config.pricePerSession}
+                  qrisUrl={config.qrisUrl}
                 />
               </>
             )}
@@ -710,7 +937,9 @@ export default function CustomerBoothSession() {
                 onCancel={() => {
                   router.push("/operator");
                 }}
-                layoutsCount={selectedFrameTemplate?.customSlots?.length ?? LAYOUTS.find((l) => l.id === activeLayout)?.count ?? 4}
+                layoutsCount={(selectedFrameTemplate?.customSlots && selectedFrameTemplate.customSlots.length > 1)
+                  ? selectedFrameTemplate.customSlots.length
+                  : (LAYOUTS.find((l) => l.id === activeLayout)?.count ?? 4)}
                 config={config}
                 activeFrameId={activeFrameId}
                 countdownDuration={countdownDuration}
@@ -722,6 +951,13 @@ export default function CustomerBoothSession() {
                 customerPhone={customerPhone}
                 currentSessionNum={currentSessionNum}
                 sessionsCount={sessionsCount}
+                onSelectPreset={handleFrameSelect}
+                onSelectFilter={setActiveFilter}
+                placedStickers={placedStickers}
+                onAddSticker={handleAddSticker}
+                onClearStickers={() => setPlacedStickers([])}
+                onUpdateSticker={handleUpdateSticker}
+                onDeleteSticker={handleDeleteSticker}
               />
             )}
 
@@ -729,14 +965,10 @@ export default function CustomerBoothSession() {
               <PreviewScreen
                 compiledStripUrl={compiledStripUrl}
                 isRendering={isRendering}
-                customText={customText}
-                setCustomText={setCustomText}
-                activeFrameId={activeFrameId}
-                handleFrameSelect={handleFrameSelect}
                 config={config}
                 activeLayout={activeLayout}
-                selectedFrameTemplate={selectedFrameTemplate}
                 handleDownload={handleDownload}
+                handlePrint={handlePrint}
                 onRetake={() => {
                   changeStep("capture");
                   setCapturedPhotos([]);
@@ -751,6 +983,20 @@ export default function CustomerBoothSession() {
                 customerPhone={customerPhone}
                 currentSessionNum={currentSessionNum}
                 sessionsCount={sessionsCount}
+              />
+            )}
+
+            {slug && step === "share" && (
+              <ShareScreen
+                config={config}
+                compiledStripUrl={compiledStripUrl}
+                capturedPhotos={capturedPhotos}
+                customerName={customerName}
+                customerPhone={customerPhone}
+                currentSessionNum={currentSessionNum}
+                sessionsCount={sessionsCount}
+                photoId={lastSavedPhotoId}
+                onComplete={handleShareComplete}
               />
             )}
           </main>

@@ -1,23 +1,18 @@
 "use client";
 
 import React, { useState, useRef } from "react";
-import { Download, RotateCcw, Type, Palette, Smile, Trash2, X } from "lucide-react";
+import { Download, RotateCcw, Smile, X, Printer } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { Input } from "@/components/ui/input";
-import { EventConfig, FrameTemplate, PlacedSticker } from "../../hooks/usePhotoboothStore";
+import { EventConfig, PlacedSticker } from "../../hooks/usePhotoboothStore";
 
 interface PreviewScreenProps {
   compiledStripUrl: string | null;
   isRendering: boolean;
-  customText: string;
-  setCustomText: (text: string) => void;
-  activeFrameId: string;
-  handleFrameSelect: (frame: FrameTemplate) => void;
   config: EventConfig;
   activeLayout: string;
-  selectedFrameTemplate: any;
   handleDownload: () => void;
+  handlePrint: () => void;
   onRetake: () => void;
   onReset: () => void;
   placedStickers: PlacedSticker[];
@@ -31,14 +26,10 @@ interface PreviewScreenProps {
 export default function PreviewScreen({
   compiledStripUrl,
   isRendering,
-  customText,
-  setCustomText,
-  activeFrameId,
-  handleFrameSelect,
   config,
   activeLayout,
-  selectedFrameTemplate,
   handleDownload,
+  handlePrint,
   onRetake,
   onReset,
   placedStickers,
@@ -67,16 +58,14 @@ export default function PreviewScreen({
     startDist: number;
   } | null>(null);
 
-  // Filter allowed stickers based on active preset template if any
-  const savedPresetId = typeof window !== "undefined" ? sessionStorage.getItem("glow_selected_preset_id") : null;
-  const activePreset = config.presetTemplates?.find(p => p.id === savedPresetId);
-  const allowedStickers = activePreset
-    ? config.customStickers?.filter(s => activePreset.allowedStickers?.includes(s.id))
-    : config.customStickers || [];
+  // Filter allowed stickers
+  const allowedStickers = config.customStickers || [];
 
   const addSticker = (stickerId: string) => {
+    // eslint-disable-next-line react-hooks/purity
+    const stickerIdStr = "placed_" + Date.now();
     const newSticker: PlacedSticker = {
-      id: "placed_" + Date.now(),
+      id: stickerIdStr,
       stickerId,
       xPct: 50, // center horizontally
       yPct: 45, // slightly above center
@@ -191,14 +180,20 @@ export default function PreviewScreen({
       {/* Integrated top bar */}
       <div className="flex items-center justify-between w-full border-b border-zinc-200/50 dark:border-zinc-800/40 pb-4 select-none">
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-xl bg-blue-600 flex items-center justify-center text-white font-extrabold text-xs tracking-tighter shadow-md shadow-blue-500/10">
-            GB
-          </div>
+          {config.logoUrl ? (
+            <div className="w-8 h-8 rounded-xl overflow-hidden bg-zinc-50 dark:bg-zinc-950 flex items-center justify-center border border-zinc-200/50 dark:border-zinc-800/40 shrink-0">
+              <img src={config.logoUrl} alt="Logo" className="w-full h-full object-contain" />
+            </div>
+          ) : (
+            <div className="w-8 h-8 rounded-xl bg-blue-600 flex items-center justify-center text-white font-extrabold text-xs tracking-tighter shadow-md shadow-blue-500/10">
+              GB
+            </div>
+          )}
           <div className="flex flex-col text-left">
             <span className="text-xs font-bold text-zinc-900 dark:text-zinc-100 leading-none">
               Event: {config.eventName || "Event Virtual"}
             </span>
-            <span className="text-[9px] text-zinc-400 dark:text-zinc-550 font-mono tracking-wide mt-1 leading-none">
+            <span className="text-[9px] text-zinc-400 dark:text-zinc-500 font-mono tracking-wide mt-1 leading-none">
               Pengunjung: {customerName} ({customerPhone})
             </span>
           </div>
@@ -219,9 +214,9 @@ export default function PreviewScreen({
         </span>
         
         {isRendering ? (
-          <div className="w-[260px] h-[480px] bg-white/70 dark:bg-zinc-950/45 backdrop-blur-md border border-zinc-200 dark:border-zinc-850 rounded-2xl flex flex-col items-center justify-center gap-4.5 shadow-2xl">
+          <div className="w-[260px] h-[480px] bg-white/70 dark:bg-zinc-950/45 backdrop-blur-md border border-zinc-200 dark:border-zinc-800 rounded-2xl flex flex-col items-center justify-center gap-4.5 shadow-2xl">
             <div className="w-8 h-8 border-3 border-blue-500 border-t-transparent rounded-full animate-spin" />
-            <span className="text-xs font-mono text-zinc-500 dark:text-zinc-555">Memproses foto strip...</span>
+            <span className="text-xs font-mono text-zinc-500 dark:text-zinc-500">Memproses foto strip...</span>
           </div>
         ) : (
           compiledStripUrl && (
@@ -230,8 +225,8 @@ export default function PreviewScreen({
               onClick={() => setActiveStickerId(null)}
               className="relative rounded-xl border border-zinc-200 dark:border-zinc-800/80 max-h-[500px] object-contain shadow-2xl overflow-hidden select-none"
               style={{
-                aspectRatio: "500/1202.5",
-                width: "240px",
+                aspectRatio: activeLayout === "grid" ? "800/1050" : (activeLayout === "polaroid" ? "600/780" : "500/1202.5"),
+                width: activeLayout === "polaroid" ? "220px" : (activeLayout === "grid" ? "235px" : "200px"),
                 backgroundImage: `url(${compiledStripUrl})`,
                 backgroundSize: "cover",
                 backgroundPosition: "center",
@@ -260,6 +255,7 @@ export default function PreviewScreen({
                     onPointerDown={e => handlePointerDown(e, placed.id, "drag")}
                     onPointerMove={handlePointerMove}
                     onPointerUp={handlePointerUp}
+                    onClick={e => e.stopPropagation()}
                   >
                     {/* Sticker Content */}
                     {isImg ? (
@@ -300,24 +296,24 @@ export default function PreviewScreen({
       </div>
 
       {/* ── Right Column: Customizer options, Stickers Drawer & Actions ── */}
-      <div className="w-full md:w-1/2 bg-white/70 dark:bg-zinc-900/40 backdrop-blur-xl border border-zinc-200 dark:border-zinc-850 rounded-3xl p-6 flex flex-col gap-5 shadow-2xl relative overflow-hidden text-left transition-colors">
+      <div className="w-full md:w-1/2 bg-white/70 dark:bg-zinc-900/40 backdrop-blur-xl border border-zinc-200 dark:border-zinc-800 rounded-3xl p-6 flex flex-col gap-5 shadow-2xl relative overflow-hidden text-left transition-colors">
         <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-blue-500/0 via-blue-500/35 to-blue-500/0" />
         
         <div>
           <h3 className="text-xl font-bold text-zinc-900 dark:text-[#e3e3e3] tracking-tight">Hias Foto Strip</h3>
-          <p className="text-xs text-zinc-555 dark:text-zinc-500 mt-1 leading-relaxed">
+          <p className="text-xs text-zinc-500 dark:text-zinc-500 mt-1 leading-relaxed">
             Tambahkan stiker, sesuaikan bingkai kustom, dan unduh hasil cetak.
           </p>
         </div>
 
         {/* Dynamic Sticker Collection Drawer */}
         <div className="flex flex-col gap-2 border-b border-zinc-200/50 dark:border-zinc-800/50 pb-4">
-          <Label className="text-xs text-zinc-650 dark:text-zinc-400 font-semibold flex items-center gap-1.5">
+          <Label className="text-xs text-zinc-600 dark:text-zinc-400 font-semibold flex items-center gap-1.5">
             <Smile className="w-3.5 h-3.5 text-zinc-400 dark:text-zinc-500" />
             <span>Ketuk Stiker untuk Menambahkan</span>
           </Label>
           
-          <div className="grid grid-cols-6 gap-2 bg-zinc-50 dark:bg-zinc-950/40 p-3 rounded-2xl border border-zinc-200/60 dark:border-zinc-850/80 max-h-[110px] overflow-y-auto">
+          <div className="grid grid-cols-6 gap-2 bg-zinc-50 dark:bg-zinc-950/40 p-3 rounded-2xl border border-zinc-200/60 dark:border-zinc-800/80 max-h-[110px] overflow-y-auto">
             {allowedStickers.map(sticker => {
               const isImg = sticker.imageUrl.startsWith("data:") || sticker.imageUrl.includes("/") || sticker.imageUrl.startsWith("http");
               return (
@@ -343,82 +339,43 @@ export default function PreviewScreen({
           </div>
         </div>
 
-        {/* Teks input */}
-        <div className="flex flex-col gap-1.5">
-          <Label className="text-xs text-zinc-650 dark:text-zinc-400 font-semibold flex items-center gap-1.5">
-            <Type className="w-3.5 h-3.5 text-zinc-400 dark:text-zinc-500" />
-            <span>Teks Bingkai</span>
-          </Label>
-          <Input
-            type="text"
-            value={customText}
-            onChange={(e) => setCustomText(e.target.value)}
-            placeholder="Ketik teks bingkai..."
-            className="bg-white dark:bg-zinc-950/50 border border-zinc-250 dark:border-zinc-800/80 text-zinc-850 dark:text-zinc-200 focus-visible:ring-blue-500 text-xs p-3 rounded-xl transition-all"
-          />
-        </div>
 
-        {/* Template selector in preview panel */}
-        {config.presetTemplates && config.presetTemplates.length > 0 && !savedPresetId && (
-          <div className="flex flex-col gap-1.5">
-            <Label className="text-xs text-zinc-650 dark:text-zinc-400 font-semibold flex items-center gap-1.5">
-              <Palette className="w-3.5 h-3.5 text-zinc-400 dark:text-zinc-500" />
-              <span>Ganti Preset Template</span>
-            </Label>
-            <select
-              value={activeFrameId}
-              onChange={(e) => {
-                const found = config.presetTemplates.find(p => p.id === e.target.value);
-                if (found) {
-                  handleFrameSelect(found);
-                }
-              }}
-              className="w-full bg-white dark:bg-zinc-950/50 border border-zinc-250 dark:border-zinc-800 rounded-xl p-3 text-xs text-zinc-800 dark:text-zinc-200 focus:outline-none focus:border-blue-500 font-sans cursor-pointer transition-all"
-            >
-              {config.presetTemplates.map((preset) => (
-                <option key={preset.id} value={preset.id}>
-                  {preset.name}
-                </option>
-              ))}
-            </select>
-          </div>
-        )}
 
-        <div className="grid grid-cols-2 gap-3">
-          <div className="bg-zinc-50 dark:bg-zinc-950/40 p-3 rounded-xl border border-zinc-200 dark:border-zinc-850/80">
-            <span className="text-[8px] text-zinc-450 dark:text-zinc-500 font-mono block tracking-wider font-bold">LAYOUT</span>
-            <span className="text-xs font-semibold text-zinc-700 dark:text-zinc-350 capitalize mt-0.5 block leading-none">{activeLayout}</span>
-          </div>
-          <div className="bg-zinc-50 dark:bg-zinc-950/40 p-3 rounded-xl border border-zinc-200 dark:border-zinc-850/80">
-            <span className="text-[8px] text-zinc-450 dark:text-zinc-500 font-mono block tracking-wider font-bold">STYLE BINGKAI</span>
-            <span className="text-xs font-semibold text-zinc-700 dark:text-zinc-355 capitalize mt-0.5 block leading-none">{selectedFrameTemplate.frameStyle}</span>
-          </div>
-        </div>
+
 
         {/* Actions */}
-        <div className="flex flex-col gap-2 mt-2">
+        <div className="grid grid-cols-2 gap-3 mt-3">
+          <Button
+            onClick={handlePrint}
+            disabled={isRendering || !compiledStripUrl}
+            className="w-full bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-600 text-white font-semibold py-3.5 rounded-xl transition-all text-xs tracking-wider flex items-center justify-center gap-1.5 shadow-lg shadow-emerald-500/20 hover:scale-[1.01] active:scale-[0.99] border-none cursor-pointer"
+          >
+            <Printer className="w-4 h-4" strokeWidth={1.5} />
+            <span>Cetak Strip</span>
+          </Button>
+
           <Button
             onClick={handleDownload}
             disabled={isRendering || !compiledStripUrl}
-            className="w-full bg-gradient-to-r from-blue-600 to-indigo-650 hover:from-blue-500 hover:to-indigo-550 text-white font-semibold py-3.5 rounded-xl transition-all text-xs tracking-wider flex items-center justify-center gap-1.5 shadow-lg shadow-blue-900/20 hover:scale-[1.01] active:scale-[0.99] border-none cursor-pointer"
+            className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-semibold py-3.5 rounded-xl transition-all text-xs tracking-wider flex items-center justify-center gap-1.5 shadow-lg shadow-blue-500/20 hover:scale-[1.01] active:scale-[0.99] border-none cursor-pointer"
           >
             <Download className="w-4 h-4" strokeWidth={1.5} />
-            <span>Simpan &amp; Unduh Strip</span>
+            <span>Simpan &amp; Lanjut</span>
           </Button>
 
           <Button
             variant="outline"
             onClick={onRetake}
-            className="w-full bg-white dark:bg-transparent border-zinc-250 dark:border-zinc-800 text-zinc-650 dark:text-zinc-350 hover:bg-zinc-50 dark:hover:bg-zinc-850 hover:text-zinc-900 dark:hover:white text-xs py-3.5 rounded-xl transition-all cursor-pointer border shadow-sm"
+            className="w-full bg-white dark:bg-transparent border-zinc-300 dark:border-zinc-800 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800 hover:text-zinc-900 dark:hover:text-white text-xs py-3.5 rounded-xl transition-all cursor-pointer border shadow-sm"
           >
             <RotateCcw className="w-3.5 h-3.5 mr-1.5" strokeWidth={1.5} />
-            <span>Foto Ulang (Retake)</span>
+            <span>Foto Ulang</span>
           </Button>
 
           <Button
             variant="ghost"
             onClick={onReset}
-            className="w-full text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-900/10 text-xs py-2.5 rounded-xl transition-all cursor-pointer border-none"
+            className="w-full text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-300 hover:bg-zinc-100/60 dark:hover:bg-zinc-900/40 text-xs py-2.5 rounded-xl transition-all cursor-pointer border-none font-semibold"
           >
             Selesai &amp; Sesi Baru
           </Button>

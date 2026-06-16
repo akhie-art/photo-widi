@@ -3,8 +3,17 @@
 import { useState, useEffect } from "react";
 import { usePhotoboothStore } from "@/app/hooks/usePhotoboothStore";
 import { useRouter } from "next/navigation";
-import { Sun, Moon, LogOut, Terminal, Activity } from "lucide-react";
+import { Sun, Moon, LogOut, Terminal, Activity, MoreVertical, Star, Heart, Sparkles, Camera } from "lucide-react";
+import { supabase } from "@/lib/supabase";
 import StartScreen from "@/app/operator/components/StartScreen";
+import { toast } from "sonner";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu";
 
 export default function OperatorDashboard() {
   const { config } = usePhotoboothStore();
@@ -18,17 +27,9 @@ export default function OperatorDashboard() {
   const [customerPhone, setCustomerPhoneState] = useState("");
   const [sessionsCount, setSessionsCountState] = useState(1);
 
-  // Layout & Hardware State
-  const [activeLayout, setActiveLayout] = useState<"strip" | "grid" | "polaroid">("strip");
-  const [activeFrameId, setActiveFrameId] = useState<string>("");
+  // Hardware State
   const [cameras, setCameras] = useState<MediaDeviceInfo[]>([]);
   const [selectedCameraId, setSelectedCameraIdState] = useState<string>("");
-
-  const activeLayoutsList = [
-    { id: "strip", name: "Classic Strip (4x1)", description: "4 foto berurutan ke bawah", count: 4 },
-    { id: "grid", name: "Grid (2x2)", description: "4 foto dalam format kotak", count: 4 },
-    { id: "polaroid", name: "Polaroid (1x1)", description: "1 foto tunggal estetik", count: 1 },
-  ].filter((l) => config.allowedLayouts ? config.allowedLayouts.includes(l.id) : true);
 
   // Session Storage Handlers
   const setSelectedCameraId = (id: string) => {
@@ -51,38 +52,48 @@ export default function OperatorDashboard() {
     if (typeof window !== "undefined") sessionStorage.setItem("glow_sessions_count", String(val));
   };
 
-  const handleFrameSelect = (frame: any) => {
-    setActiveFrameId(frame.id);
-  };
-
-  // Initialization & Auth Guard
+  // Initialization & Auth Guard (Secure Supabase Auth check)
   useEffect(() => {
     if (typeof window === "undefined") return;
     
-    // Auth Check
-    const operatorAuth = sessionStorage.getItem("glow_operator_auth");
-    const operatorName = sessionStorage.getItem("glow_operator_name");
-    
-    if (operatorAuth === "true" && operatorName) {
-      setCurrentOperator(operatorName);
-    } else {
-      router.replace("/login?redirect=/operator");
-      return;
-    }
+    const checkAuth = async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        const role = user?.user_metadata?.role;
+        const displayName = user?.user_metadata?.display_name || "Operator";
 
-    // Theme initialization
-    const isDark = document.documentElement.classList.contains("dark");
-    setTheme(isDark ? "dark" : "light");
-    
-    // Hydrate form states
-    const savedName = sessionStorage.getItem("glow_customer_name");
-    if (savedName) setCustomerNameState(savedName);
-    
-    const savedPhone = sessionStorage.getItem("glow_customer_phone");
-    if (savedPhone) setCustomerPhoneState(savedPhone);
-    
-    const savedSessions = sessionStorage.getItem("glow_sessions_count");
-    if (savedSessions) setSessionsCountState(Number(savedSessions));
+        if (user && role === "operator") {
+          setCurrentOperator(displayName);
+          sessionStorage.setItem("glow_operator_auth", "true");
+          sessionStorage.setItem("glow_operator_name", displayName);
+        } else {
+          sessionStorage.removeItem("glow_operator_auth");
+          sessionStorage.removeItem("glow_operator_name");
+          router.replace("/login");
+          return;
+        }
+      } catch (err) {
+        console.error("Operator auth check failed:", err);
+        router.replace("/login");
+        return;
+      }
+
+      // Theme initialization
+      const isDark = document.documentElement.classList.contains("dark");
+      setTheme(isDark ? "dark" : "light");
+      
+      // Hydrate form states
+      const savedName = sessionStorage.getItem("glow_customer_name");
+      if (savedName) setCustomerNameState(savedName);
+      
+      const savedPhone = sessionStorage.getItem("glow_customer_phone");
+      if (savedPhone) setCustomerPhoneState(savedPhone);
+      
+      const savedSessions = sessionStorage.getItem("glow_sessions_count");
+      if (savedSessions) setSessionsCountState(Number(savedSessions));
+    };
+
+    checkAuth();
   }, [router]);
 
   // Hardware Initialization
@@ -116,7 +127,7 @@ export default function OperatorDashboard() {
   const toggleTheme = () => {
     const newTheme = theme === "dark" ? "light" : "dark";
     setTheme(newTheme);
-    localStorage.setItem("glow_theme", newTheme);
+    sessionStorage.setItem("glow_theme", newTheme);
     
     if (newTheme === "dark") {
       document.documentElement.classList.add("dark");
@@ -129,12 +140,12 @@ export default function OperatorDashboard() {
     sessionStorage.removeItem("glow_operator_auth");
     sessionStorage.removeItem("glow_operator_name");
     setCurrentOperator(null);
-    router.replace("/login?redirect=/operator");
+    router.replace("/login");
   };
 
   const handleRegisterStart = () => {
     if (!customerName.trim() || !customerPhone.trim()) {
-      alert("Nama dan Nomor HP tidak boleh kosong!");
+      toast.error("Nama dan Nomor HP tidak boleh kosong!");
       return;
     }
 
@@ -176,69 +187,110 @@ export default function OperatorDashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-[#fbfbfb] dark:bg-[#121214] text-zinc-950 dark:text-zinc-50 font-sans flex flex-col selection:bg-zinc-200 dark:selection:bg-zinc-800 transition-colors duration-300">
+    <div className="min-h-screen bg-[#FBFBFA] dark:bg-[#0B0B0C] text-zinc-850 dark:text-[#E3E3E3] font-sans flex flex-col selection:bg-zinc-200 dark:selection:bg-zinc-850 transition-colors duration-300 relative overflow-hidden">
       
-      {/* ── HEADER ── */}
-      <header className="w-full border-b border-zinc-200 dark:border-zinc-800/60 bg-white dark:bg-[#121214] sticky top-0 z-50">
-        <div className="max-w-5xl mx-auto px-6 h-20 flex items-center justify-between">
-          
-          {/* Left: Brand */}
-          <div className="flex items-center gap-4">
-            <div className="w-10 h-10 rounded-xl bg-zinc-900 dark:bg-white flex items-center justify-center text-white dark:text-zinc-900 font-bold text-sm shadow-sm">
-              GB
-            </div>
-            <div className="flex flex-col">
-              <span className="font-semibold text-sm leading-tight tracking-tight">Glowbooth</span>
-              <span className="text-[11px] text-zinc-500 font-mono mt-1 flex items-center gap-1.5">
-                <Terminal className="w-3 h-3" />
-                Operator Panel
-              </span>
-            </div>
-          </div>
-          
-          {/* Right: Controls */}
-          <div className="flex items-center gap-3">
-            <span className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 bg-zinc-100 dark:bg-zinc-900 rounded-lg text-[11px] font-mono font-medium text-zinc-600 dark:text-zinc-400">
-              <Activity className="w-3.5 h-3.5" />
-              {currentOperator}
-            </span>
+      {/* Visual Ambient Background Glows - Happy & Cheerful Colors */}
+      <div className="absolute top-[-10%] left-[-10%] w-[50%] aspect-square rounded-full bg-amber-400/8 dark:bg-amber-500/5 blur-[120px] pointer-events-none z-0 animate-pulse" style={{ animationDuration: '8s' }} />
+      <div className="absolute bottom-[-10%] right-[-10%] w-[50%] aspect-square rounded-full bg-pink-400/8 dark:bg-pink-500/5 blur-[120px] pointer-events-none z-0 animate-pulse" style={{ animationDuration: '10s' }} />
+      <div className="absolute top-[20%] right-[-15%] w-[45%] aspect-square rounded-full bg-cyan-400/6 dark:bg-cyan-500/3 blur-[120px] pointer-events-none z-0" />
+      <div className="absolute bottom-[20%] left-[-15%] w-[45%] aspect-square rounded-full bg-purple-400/6 dark:bg-purple-500/3 blur-[120px] pointer-events-none z-0" />
 
-            <span className="hidden md:flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded-lg text-[11px] font-mono font-medium">
-              <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
-              {config.eventName}
-            </span>
-
-            <div className="w-px h-5 bg-zinc-200 dark:bg-zinc-800 mx-1 hidden sm:block" />
-
-            <button
-              onClick={toggleTheme}
-              className="w-9 h-9 rounded-lg border border-zinc-200 dark:border-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-900 flex items-center justify-center transition-colors text-zinc-600 dark:text-zinc-400"
-              aria-label="Toggle Theme"
-            >
-              {theme === "dark" ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
-            </button>
-
-            <button
-              onClick={handleOperatorLogout}
-              className="w-9 h-9 rounded-lg border border-red-200 dark:border-red-900/30 hover:bg-red-50 dark:hover:bg-red-900/20 text-red-500 flex items-center justify-center transition-colors"
-              title="Keluar Operator"
-            >
-              <LogOut className="w-4 h-4" />
-            </button>
-          </div>
+      {/* Floating Photobooth/Polaroid Illustrations & Playful Sparkles */}
+      <div className="absolute left-[5%] top-[20%] w-24 h-56 rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200/50 dark:border-zinc-800/50 shadow-xl rotate-[-12deg] p-2 flex flex-col gap-1.5 pointer-events-none select-none opacity-20 dark:opacity-10 hidden xl:flex z-0">
+        <div className="bg-zinc-50 dark:bg-zinc-950 aspect-[4/3] rounded-md flex items-center justify-center">
+          <Star className="w-4 h-4 text-amber-400 fill-amber-300 dark:fill-transparent" />
         </div>
-      </header>
+        <div className="bg-zinc-50 dark:bg-zinc-950 aspect-[4/3] rounded-md flex items-center justify-center">
+          <Camera className="w-4 h-4 text-blue-400" />
+        </div>
+        <div className="bg-zinc-50 dark:bg-zinc-950 aspect-[4/3] rounded-md flex items-center justify-center">
+          <Heart className="w-4 h-4 text-pink-400 fill-pink-300 dark:fill-transparent" />
+        </div>
+        <div className="mt-auto text-center text-[6px] font-mono tracking-widest text-zinc-450 dark:text-zinc-500 uppercase font-bold">MEMORIES</div>
+      </div>
+
+      <div className="absolute right-[5%] top-[25%] w-28 h-32 rounded-lg bg-white dark:bg-zinc-900 border border-zinc-200/50 dark:border-zinc-800/50 shadow-xl rotate-[15deg] p-2 flex flex-col pointer-events-none select-none opacity-20 dark:opacity-10 hidden xl:flex z-0">
+        <div className="bg-zinc-50 dark:bg-zinc-950 w-full aspect-square rounded-md flex items-center justify-center">
+          <Sparkles className="w-5 h-5 text-purple-400" />
+        </div>
+        <div className="mt-auto text-center text-[8px] font-serif italic text-zinc-400 dark:text-zinc-500">smile!</div>
+      </div>
+
+      {/* Playful Floating Confetti & Sparkles */}
+      <div className="absolute left-[15%] top-[12%] pointer-events-none select-none opacity-25 dark:opacity-10 animate-bounce z-0" style={{ animationDuration: '4s' }}>
+        <Sparkles className="w-6 h-6 text-yellow-400 fill-yellow-100 dark:fill-transparent" />
+      </div>
+      <div className="absolute left-[4%] top-[55%] pointer-events-none select-none opacity-15 dark:opacity-5 animate-pulse z-0" style={{ animationDuration: '3s' }}>
+        <Heart className="w-8 h-8 text-pink-400 fill-pink-400" />
+      </div>
+      <div className="absolute left-[18%] top-[75%] pointer-events-none select-none opacity-20 dark:opacity-10 z-0">
+        <Camera className="w-7 h-7 text-blue-400" />
+      </div>
+
+      <div className="absolute right-[16%] top-[15%] pointer-events-none select-none opacity-25 dark:opacity-10 animate-pulse z-0" style={{ animationDuration: '5s' }}>
+        <Sparkles className="w-5 h-5 text-pink-400 fill-pink-100 dark:fill-transparent" />
+      </div>
+      <div className="absolute right-[4%] top-[60%] pointer-events-none select-none opacity-20 dark:opacity-8 animate-bounce z-0" style={{ animationDuration: '3.5s' }}>
+        <Star className="w-8 h-8 text-yellow-400 fill-yellow-400" />
+      </div>
+      <div className="absolute right-[18%] top-[78%] pointer-events-none select-none opacity-15 dark:opacity-8 z-0">
+        <Sparkles className="w-6 h-6 text-purple-400 fill-purple-100 dark:fill-transparent" />
+      </div>
+
+      {/* Floating Three-Dot Menu */}
+      <div className="fixed top-6 right-6 z-50">
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            className="w-10 h-10 rounded-lg border border-zinc-200/90 dark:border-zinc-800 bg-white dark:bg-zinc-900 flex items-center justify-center hover:bg-zinc-50 dark:hover:bg-zinc-800 cursor-pointer shadow-sm transition-all focus:outline-none"
+            aria-label="Operator Menu"
+          >
+            <MoreVertical className="w-5 h-5 text-zinc-650 dark:text-zinc-455" />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-56 mt-2 bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-850/80 shadow-lg p-1.5 rounded-lg">
+            {/* Account Information */}
+            <div className="px-2 py-2 flex flex-col gap-0.5 select-none">
+              <span className="text-[9px] text-zinc-405 dark:text-zinc-500 font-bold tracking-wider font-mono block uppercase">OPERATOR AKTIF</span>
+              <span className="text-sm font-bold text-zinc-900 dark:text-white truncate">{currentOperator || "Operator"}</span>
+              <span className="text-[10px] text-zinc-500 font-mono mt-0.5">{config.eventName || "Photobooth"}</span>
+            </div>
+            
+            <DropdownMenuSeparator />
+
+            {/* Toggle Mode */}
+            <DropdownMenuItem 
+              onClick={toggleTheme} 
+              className="flex items-center gap-2 px-2.5 py-2 text-xs font-semibold text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-900 rounded-md cursor-pointer focus:outline-none transition-colors"
+            >
+              {theme === "dark" ? (
+                <>
+                  <Sun className="w-4 h-4 text-amber-500" />
+                  <span>Mode Terang</span>
+                </>
+              ) : (
+                <>
+                  <Moon className="w-4 h-4 text-indigo-500" />
+                  <span>Mode Gelap</span>
+                </>
+              )}
+            </DropdownMenuItem>
+
+            {/* Logout */}
+            <DropdownMenuItem 
+              onClick={handleOperatorLogout} 
+              className="flex items-center gap-2 px-2.5 py-2 text-xs font-semibold text-red-500 hover:bg-red-50 dark:hover:bg-red-950/25 rounded-md cursor-pointer focus:outline-none transition-colors"
+            >
+              <LogOut className="w-4 h-4 text-red-500" />
+              <span>Keluar Operator</span>
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
 
       {/* ── MAIN WORKSPACE ── */}
-      <main className="flex-1 flex items-center justify-center p-6 sm:p-12">
-        <div className="w-full max-w-[480px] animate-fade-in duration-500">
+      <main className="flex-1 flex items-center justify-center p-6 sm:p-12 z-10">
+        <div className="w-full max-w-[480px] animate-fade-in duration-500 flex justify-center">
           <StartScreen
             config={config}
-            activeLayoutsList={activeLayoutsList}
-            activeLayout={activeLayout}
-            setActiveLayout={setActiveLayout}
-            activeFrameId={activeFrameId}
-            handleFrameSelect={handleFrameSelect}
             cameras={cameras}
             selectedCameraId={selectedCameraId}
             setSelectedCameraId={setSelectedCameraId}
@@ -252,7 +304,6 @@ export default function OperatorDashboard() {
           />
         </div>
       </main>
-      
     </div>
   );
 }

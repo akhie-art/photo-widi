@@ -4,17 +4,18 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { usePhotoboothStore } from "../hooks/usePhotoboothStore";
+import { supabase } from "@/lib/supabase";
 import {
   LayoutDashboard,
   Settings,
   Image as ImageIcon,
-  QrCode,
-  Tv,
   ArrowLeft,
   Sparkles,
   Palette,
   Sun,
   Moon,
+  History,
+  Users,
 } from "lucide-react";
 
 import {
@@ -33,7 +34,6 @@ import {
   SidebarFooter,
 } from "@/components/ui/sidebar";
 
-import { Separator } from "@/components/ui/separator";
 import SlideshowOverlay from "./components/SlideshowOverlay";
 
 export default function AdminLayout({
@@ -43,20 +43,33 @@ export default function AdminLayout({
 }) {
   const { config, photos } = usePhotoboothStore();
   const [isSlideshowActive, setIsSlideshowActive] = useState(false);
-  const [customerUrl, setCustomerUrl] = useState("");
   const pathname = usePathname();
   const router = useRouter();
   const [authorized, setAuthorized] = useState(false);
 
-  // Authentication gate
+  // Authentication gate (Secure Supabase Auth check)
   useEffect(() => {
     if (typeof window === "undefined") return;
-    const adminAuth = localStorage.getItem("glow_admin_auth");
-    if (adminAuth === "true") {
-      setAuthorized(true);
-    } else {
-      router.replace("/login?redirect=/admin");
-    }
+
+    const checkAuth = async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        const role = user?.user_metadata?.role;
+        
+        if (user && role === "admin") {
+          setAuthorized(true);
+          sessionStorage.setItem("glow_admin_auth", "true");
+        } else {
+          sessionStorage.removeItem("glow_admin_auth");
+          router.replace("/login");
+        }
+      } catch (err) {
+        console.error("Auth check failed:", err);
+        router.replace("/login");
+      }
+    };
+
+    checkAuth();
   }, [router]);
 
   // Determine current active page
@@ -68,11 +81,13 @@ export default function AdminLayout({
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    const savedTheme = localStorage.getItem("glow_admin_theme") as "dark" | "light" | null;
+    const savedTheme = sessionStorage.getItem("glow_admin_theme") as "dark" | "light" | null;
     if (savedTheme) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setTheme(savedTheme);
       document.documentElement.classList.toggle("dark", savedTheme === "dark");
     } else {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setTheme("dark");
       document.documentElement.classList.add("dark");
     }
@@ -81,16 +96,11 @@ export default function AdminLayout({
   const toggleTheme = () => {
     const nextTheme = theme === "dark" ? "light" : "dark";
     setTheme(nextTheme);
-    localStorage.setItem("glow_admin_theme", nextTheme);
+    sessionStorage.setItem("glow_admin_theme", nextTheme);
     document.documentElement.classList.toggle("dark", nextTheme === "dark");
   };
 
-  // Set the Customer URL dynamically based on current origin
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      setCustomerUrl(window.location.origin);
-    }
-  }, []);
+
 
   // Listen to start-slideshow custom events from overview pages
   useEffect(() => {
@@ -129,12 +139,18 @@ export default function AdminLayout({
           <Sidebar collapsible="icon" className="border-r border-sidebar-border bg-sidebar text-sidebar-foreground transition-all duration-200">
             <SidebarHeader className="border-b border-sidebar-border px-6 group-data-[state=collapsed]:px-2 py-4.5 group-data-[state=collapsed]:py-3 bg-sidebar transition-all duration-200">
               <div className="flex items-center gap-2.5 group-data-[state=collapsed]:justify-center">
-                <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-[#4285F4] via-[#9B72CB] to-[#D96570] flex items-center justify-center shadow-md shrink-0">
-                  <Sparkles className="w-4.5 h-4.5 text-white" strokeWidth={1.5} />
-                </div>
-                <div className="group-data-[state=collapsed]:hidden transition-all duration-200">
-                  <h2 className="text-sm font-semibold tracking-wide bg-clip-text text-transparent bg-gradient-to-r from-blue-400 via-purple-400 to-pink-400">
-                    GLOW SYSTEM
+                {config.logoUrl ? (
+                  <div className="w-8 h-8 rounded-full overflow-hidden flex items-center justify-center border border-sidebar-border bg-zinc-50 dark:bg-zinc-900 shrink-0">
+                    <img src={config.logoUrl} alt="Logo" className="w-full h-full object-contain" />
+                  </div>
+                ) : (
+                  <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-[#4285F4] via-[#9B72CB] to-[#D96570] flex items-center justify-center shadow-md shrink-0">
+                    <Sparkles className="w-4.5 h-4.5 text-white" strokeWidth={1.5} />
+                  </div>
+                )}
+                <div className="group-data-[state=collapsed]:hidden transition-all duration-200 min-w-0">
+                  <h2 className="text-sm font-semibold tracking-wide bg-clip-text text-transparent bg-gradient-to-r from-blue-400 via-purple-400 to-pink-400 truncate">
+                    {config.eventName || "GLOW SYSTEM"}
                   </h2>
                   <p className="text-[9px] text-zinc-500 font-mono">Booth Management</p>
                 </div>
@@ -152,7 +168,7 @@ export default function AdminLayout({
                       <SidebarMenuButton
                         render={<Link href="/admin" />}
                         isActive={activeTab === "dashboard"}
-                        tooltip="Ringkasan Event"
+                        tooltip="Dashboard"
                         className={`w-full justify-start group-data-[state=collapsed]:justify-center gap-3 group-data-[state=collapsed]:gap-0 px-3 group-data-[state=collapsed]:px-2 py-2 rounded-lg text-xs transition-all border ${
                           activeTab === "dashboard"
                             ? "bg-sidebar-accent border-sidebar-border text-foreground font-medium"
@@ -160,7 +176,23 @@ export default function AdminLayout({
                         }`}
                       >
                         <LayoutDashboard className="w-4 h-4 shrink-0" strokeWidth={1.5} />
-                        <span className="group-data-[state=collapsed]:hidden">Ringkasan Event</span>
+                        <span className="group-data-[state=collapsed]:hidden">Dashboard</span>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+
+                    <SidebarMenuItem>
+                      <SidebarMenuButton
+                        render={<Link href="/admin/operators" />}
+                        isActive={activeTab === "operators"}
+                        tooltip="Manajemen Operator"
+                        className={`w-full justify-start group-data-[state=collapsed]:justify-center gap-3 group-data-[state=collapsed]:gap-0 px-3 group-data-[state=collapsed]:px-2 py-2 rounded-lg text-xs transition-all border ${
+                          activeTab === "operators"
+                            ? "bg-sidebar-accent border-sidebar-border text-foreground font-medium"
+                            : "bg-transparent border-transparent hover:bg-sidebar-accent/50 text-muted-foreground hover:text-foreground"
+                        }`}
+                      >
+                        <Users className="w-4 h-4 shrink-0" strokeWidth={1.5} />
+                        <span className="group-data-[state=collapsed]:hidden">Manajemen Operator</span>
                       </SidebarMenuButton>
                     </SidebarMenuItem>
 
@@ -223,44 +255,26 @@ export default function AdminLayout({
 
                     <SidebarMenuItem>
                       <SidebarMenuButton
-                        render={<Link href="/admin/qr" />}
-                        isActive={activeTab === "qr"}
-                        tooltip="QR Sharing"
+                        render={<Link href="/admin/history" />}
+                        isActive={activeTab === "history"}
+                        tooltip="Riwayat Sesi Foto"
                         className={`w-full justify-start group-data-[state=collapsed]:justify-center gap-3 group-data-[state=collapsed]:gap-0 px-3 group-data-[state=collapsed]:px-2 py-2 rounded-lg text-xs transition-all border ${
-                          activeTab === "qr"
+                          activeTab === "history"
                             ? "bg-sidebar-accent border-sidebar-border text-foreground font-medium"
                             : "bg-transparent border-transparent hover:bg-sidebar-accent/50 text-muted-foreground hover:text-foreground"
                         }`}
                       >
-                        <QrCode className="w-4 h-4 shrink-0" strokeWidth={1.5} />
-                        <span className="group-data-[state=collapsed]:hidden">QR Sharing</span>
+                        <History className="w-4 h-4 shrink-0" strokeWidth={1.5} />
+                        <span className="group-data-[state=collapsed]:hidden">Riwayat Sesi Foto</span>
                       </SidebarMenuButton>
                     </SidebarMenuItem>
+
+
                   </SidebarMenu>
                 </SidebarGroupContent>
               </SidebarGroup>
 
-              <Separator className="bg-sidebar-border my-1 mx-2 group-data-[state=collapsed]:mx-0" />
 
-              <SidebarGroup className="group-data-[state=collapsed]:p-0">
-                <SidebarGroupLabel className="text-[10px] text-zinc-500 font-mono tracking-wider px-2 mb-1 group-data-[state=collapsed]:hidden">
-                  KONTROL LIVE
-                </SidebarGroupLabel>
-                <SidebarGroupContent>
-                  <SidebarMenu>
-                    <SidebarMenuItem>
-                      <SidebarMenuButton
-                        onClick={() => setIsSlideshowActive(true)}
-                        tooltip="Mulai Live Slideshow"
-                        className="w-full justify-start group-data-[state=collapsed]:justify-center gap-3 group-data-[state=collapsed]:gap-0 px-3 group-data-[state=collapsed]:px-2 py-2.5 rounded-lg text-xs bg-sidebar-accent hover:bg-sidebar-accent/80 border border-sidebar-border text-blue-500 dark:text-blue-400 hover:text-blue-600 dark:hover:text-blue-300 font-semibold transition-all cursor-pointer"
-                      >
-                        <Tv className="w-4.5 h-4.5 text-blue-600 dark:text-blue-400 shrink-0" strokeWidth={1.5} />
-                        <span className="group-data-[state=collapsed]:hidden">Mulai Live Slideshow</span>
-                      </SidebarMenuButton>
-                    </SidebarMenuItem>
-                  </SidebarMenu>
-                </SidebarGroupContent>
-              </SidebarGroup>
             </SidebarContent>
 
             <SidebarFooter className="border-t border-sidebar-border p-3 bg-sidebar flex flex-col gap-2 justify-center transition-all duration-200">
@@ -274,7 +288,7 @@ export default function AdminLayout({
               </Link>
               <button
                 onClick={() => {
-                  localStorage.removeItem("glow_admin_auth");
+                  sessionStorage.removeItem("glow_admin_auth");
                   router.replace("/login");
                 }}
                 className="w-full group-data-[state=collapsed]:w-8 group-data-[state=collapsed]:h-8 bg-red-500/10 hover:bg-red-500 hover:text-white text-red-500 border border-red-500/20 text-xs font-semibold py-2 rounded-xl transition-all flex items-center justify-center gap-2 group-data-[state=collapsed]:gap-0 cursor-pointer"

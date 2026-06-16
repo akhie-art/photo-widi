@@ -82,7 +82,7 @@ export default function SlideshowOverlay({
 
         <div className="flex items-center gap-4">
           {newPhotoAlert && (
-            <div className="bg-gradient-to-r from-blue-500 to-purple-600 text-white px-4 py-2 rounded-xl text-xs font-mono font-bold animate-bounce shadow-md flex items-center gap-1.5">
+            <div className="bg-gradient-to-r from-blue-500 to-purple-600 text-white px-4 py-2 rounded-lg text-xs font-mono font-bold animate-bounce shadow-md flex items-center gap-1.5">
               <Sparkles className="w-3.5 h-3.5 text-white animate-pulse" strokeWidth={1.5} />
               <span>FOTO BARU BERHASIL DIJEPRET!</span>
             </div>
@@ -90,7 +90,7 @@ export default function SlideshowOverlay({
           <Button
             variant="outline"
             onClick={onClose}
-            className="bg-[#1e1e1f] border-[#282829] hover:bg-[#202124] text-zinc-300 text-xs font-mono px-4 py-2 rounded-xl transition-all"
+            className="bg-[#1e1e1f] border-[#282829] hover:bg-[#202124] text-zinc-300 text-xs font-mono px-4 py-2 rounded-lg transition-all"
           >
             Keluar Slideshow
           </Button>
@@ -100,7 +100,7 @@ export default function SlideshowOverlay({
       {/* Slideshow Image Display */}
       <div className="flex-1 flex items-center justify-center p-4">
         {photos.length === 0 ? (
-          <div className="text-center max-w-md bg-[#1e1e1f] border border-[#282829] p-10 rounded-3xl flex flex-col items-center gap-4">
+          <div className="text-center max-w-md bg-[#1e1e1f] border border-[#282829] p-10 rounded-xl flex flex-col items-center gap-4">
             <div className="w-14 h-14 rounded-full bg-[#131314] border border-[#282829] flex items-center justify-center text-blue-400">
               <Camera className="w-7 h-7" strokeWidth={1.5} />
             </div>

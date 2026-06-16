@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
+import { toast } from "sonner";
 
 /** Position and size of a single camera slot on the photo strip (all values in %). */
 export interface SlotConfig {
@@ -16,8 +17,6 @@ export interface SlotConfig {
 export interface FrameTemplate {
   id: string;
   name: string;
-  frameStyle: string; // 'neon' | 'classic-white' | 'classic-black' | 'pastel' | 'filmstrip'
-  frameText: string;
   imageOverlay?: string;   // transparent PNG overlay base64 data URL
   customSlots?: SlotConfig[]; // admin-defined slot layout (overrides built-in positions)
   overlayX?: number;
@@ -58,10 +57,6 @@ export interface PlacedSticker {
 export interface PresetTemplate {
   id: string;
   name: string;
-  layoutId: string;       // referensi ke LayoutAsset
-  frameId?: string;       // referensi ke FrameTemplate (opsional)
-  frameStyle: string;    // 'neon' | 'classic-white' | 'classic-black' | 'pastel' | 'filmstrip'
-  frameText: string;
   imageOverlay?: string;  // PNG overlay (base64 data URL)
   customSlots?: SlotConfig[];
   overlayX?: number;      // overlay X position (%) — 0 = left edge
@@ -69,8 +64,6 @@ export interface PresetTemplate {
   overlayW?: number;      // overlay width  (%) — 100 = full canvas width
   overlayH?: number;      // overlay height (%) — 100 = full canvas height
   overlayRotation?: number; // overlay rotation in degrees
-  filterId: string;       // referensi ke FilterAsset
-  allowedStickers: string[]; // daftar ID StickerAsset yang diizinkan
   forceLayout: boolean;   // jika true, pilihan layout manual dikunci/diabaikan
 }
 
@@ -86,13 +79,13 @@ export interface EventConfig {
   allowedFilters: string[];
   allowedLayouts: string[];
   mirrorDefault: boolean;
-  activeFrameId: string;
-  customFrames: FrameTemplate[];
-  customLayouts: LayoutAsset[];
   customFilters: FilterAsset[];
   customStickers: StickerAsset[];
   presetTemplates: PresetTemplate[];
   activePresetTemplateId?: string;
+  logoUrl?: string;
+  pricePerSession?: number;
+  qrisUrl?: string;
 }
 
 export interface PhotoStrip {
@@ -103,6 +96,9 @@ export interface PhotoStrip {
   customerPhone?: string;
   sessionsCount?: number;
   operatorName?: string;
+  capturedPhotos?: string[]; // array of base64 individual photos
+  paymentMethod?: string;
+  amount?: number;
 }
 
 
@@ -117,13 +113,13 @@ const DEFAULT_CONFIG: EventConfig = {
   allowedFilters: ["original"],
   allowedLayouts: ["strip"],
   mirrorDefault: true,
-  activeFrameId: "",
-  customFrames: [],
-  customLayouts: [],
   customFilters: [],
   customStickers: [],
   presetTemplates: [],
   activePresetTemplateId: "",
+  logoUrl: "",
+  pricePerSession: 25000,
+  qrisUrl: "",
 };
 
 // ─── LocalStorage helpers (fallback & cross-tab sync cache) ───────────────────
@@ -131,29 +127,57 @@ const DEFAULT_CONFIG: EventConfig = {
 function lsGetConfig(): EventConfig | null {
   if (typeof window === "undefined") return null;
   try {
-    const raw = localStorage.getItem("glow_booth_config");
+    const raw = sessionStorage.getItem("glow_booth_config");
     return raw ? JSON.parse(raw) : null;
   } catch { return null; }
 }
 
 function lsSetConfig(cfg: EventConfig) {
   if (typeof window === "undefined") return;
-  localStorage.setItem("glow_booth_config", JSON.stringify(cfg));
-  window.dispatchEvent(new StorageEvent("storage", { key: "glow_booth_config", newValue: JSON.stringify(cfg) }));
+  try {
+    sessionStorage.setItem("glow_booth_config", JSON.stringify(cfg));
+  } catch (err) {
+    console.warn("[Storage] Failed to save config to sessionStorage:", err);
+  }
+  try {
+    window.dispatchEvent(new StorageEvent("storage", { key: "glow_booth_config", newValue: JSON.stringify(cfg) }));
+  } catch {}
 }
 
 function lsGetPhotos(): PhotoStrip[] {
   if (typeof window === "undefined") return [];
   try {
-    const raw = localStorage.getItem("glow_booth_photos");
+    const raw = sessionStorage.getItem("glow_booth_photos");
     return raw ? JSON.parse(raw) : [];
   } catch { return []; }
 }
 
 function lsSetPhotos(photos: PhotoStrip[]) {
   if (typeof window === "undefined") return;
-  localStorage.setItem("glow_booth_photos", JSON.stringify(photos));
-  window.dispatchEvent(new StorageEvent("storage", { key: "glow_booth_photos", newValue: JSON.stringify(photos) }));
+  try {
+    // Hanya simpan 10 foto terbaru di sessionStorage untuk mencegah QuotaExceededError
+    const cleanPhotos = photos.slice(0, 10).map((p, idx) => ({
+      id: p.id,
+      timestamp: p.timestamp,
+      customerName: p.customerName,
+      customerPhone: p.customerPhone,
+      sessionsCount: p.sessionsCount,
+      operatorName: p.operatorName,
+      paymentMethod: p.paymentMethod,
+      amount: p.amount,
+      dataUrl: idx < 2 ? p.dataUrl : "",
+    }));
+
+    sessionStorage.setItem("glow_booth_photos", JSON.stringify(cleanPhotos));
+  } catch (err) {
+    console.warn("[Storage] Failed to save photos to sessionStorage:", err);
+    try {
+      sessionStorage.removeItem("glow_booth_photos");
+    } catch {}
+  }
+  try {
+    window.dispatchEvent(new StorageEvent("storage", { key: "glow_booth_photos", newValue: JSON.stringify(photos) }));
+  } catch (err) {}
 }
 
 // ─── Migration helper ─────────────────────────────────────────────────────────
@@ -162,36 +186,74 @@ function migrateConfig(parsed: EventConfig): { config: EventConfig; changed: boo
   let changed = false;
 
   // Ensure all array fields exist (initialize to empty if missing)
-  if (!parsed.customFrames) { parsed.customFrames = []; changed = true; }
-  if (!parsed.customLayouts) { parsed.customLayouts = []; changed = true; }
   if (!parsed.customFilters) { parsed.customFilters = []; changed = true; }
   if (!parsed.customStickers) { parsed.customStickers = []; changed = true; }
   if (!parsed.presetTemplates) { parsed.presetTemplates = []; changed = true; }
   if (parsed.activePresetTemplateId === undefined) { parsed.activePresetTemplateId = ""; changed = true; }
 
-  // Deduplicate frames by ID
-  const uniqueFrames = parsed.customFrames.filter(
-    (f, idx, self) => self.findIndex((x) => x.id === f.id) === idx
-  );
-  if (uniqueFrames.length !== parsed.customFrames.length) {
-    parsed.customFrames = uniqueFrames;
-    changed = true;
-  }
-
   return { config: parsed, changed };
 }
 
 
+// ─── Storage helpers (base64 to storage bucket) ─────────────────────────────
+
+async function base64ToBlob(base64: string, defaultContentType = "image/png"): Promise<Blob> {
+  try {
+    const res = await fetch(base64);
+    return await res.blob();
+  } catch (err) {
+    const parts = base64.split(";base64,");
+    const contentType = parts[0].split(":")[1] || defaultContentType;
+    const raw = window.atob(parts[1]);
+    const rawLength = raw.length;
+    const uInt8Array = new Uint8Array(rawLength);
+    for (let i = 0; i < rawLength; ++i) {
+      uInt8Array[i] = raw.charCodeAt(i);
+    }
+    return new Blob([uInt8Array], { type: contentType });
+  }
+}
+
+async function uploadImageToStorage(base64: string, path: string): Promise<string> {
+  const blob = await base64ToBlob(base64);
+  const { error } = await supabase.storage
+    .from("photostrips")
+    .upload(path, blob, {
+      contentType: blob.type || "image/png",
+      upsert: true,
+    });
+
+  if (error) throw error;
+
+  const { data: urlData } = supabase.storage
+    .from("photostrips")
+    .getPublicUrl(path);
+
+  return urlData.publicUrl;
+}
+
 // ─── Main Hook ────────────────────────────────────────────────────────────────
 
 export function usePhotoboothStore() {
-  const [config, setConfig] = useState<EventConfig>(DEFAULT_CONFIG);
+  const [config, setConfig] = useState<EventConfig>(() => {
+    return lsGetConfig() || DEFAULT_CONFIG;
+  });
   const [photos, setPhotos] = useState<PhotoStrip[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   // ── Load initial data (Supabase first, fallback to localStorage) ──────────
   useEffect(() => {
     if (typeof window === "undefined") return;
+
+    // Load from sessionStorage immediately to avoid waiting for network
+    const cachedCfg = lsGetConfig();
+    if (cachedCfg) {
+      setConfig(cachedCfg);
+    }
+    const cachedPhotos = lsGetPhotos();
+    if (cachedPhotos && cachedPhotos.length > 0) {
+      setPhotos(cachedPhotos);
+    }
 
     const init = async () => {
       setIsLoading(true);
@@ -205,12 +267,10 @@ export function usePhotoboothStore() {
 
         // ── 2. Fetch all normalized table assets ──
         const [
-          { data: layoutsRows },
           { data: filtersRows },
           { data: stickersRows },
           { data: presetsRows }
         ] = await Promise.all([
-          supabase.from("layout_assets").select("*").order("created_at", { ascending: true }),
           supabase.from("filter_assets").select("*").order("created_at", { ascending: true }),
           supabase.from("sticker_assets").select("*").order("created_at", { ascending: true }),
           supabase.from("preset_templates").select("*").order("created_at", { ascending: true }),
@@ -229,14 +289,6 @@ export function usePhotoboothStore() {
         const { config: migrated } = migrateConfig(baseConfig);
 
         // Merge normalized table rows into the baseConfig
-        if (layoutsRows) {
-          migrated.customLayouts = layoutsRows.map(r => ({
-            id: r.id,
-            name: r.name,
-            count: r.count,
-            description: r.description || "",
-          }));
-        }
         if (filtersRows) {
           migrated.customFilters = filtersRows.map(r => ({
             id: r.id,
@@ -255,9 +307,6 @@ export function usePhotoboothStore() {
           migrated.presetTemplates = presetsRows.map(r => ({
             id: r.id,
             name: r.name,
-            layoutId: r.layout_id,
-            frameStyle: r.frame_style,
-            frameText: r.frame_text || "",
             imageOverlay: r.image_overlay || undefined,
             customSlots: r.custom_slots || undefined,
             overlayX: r.overlay_x !== null && r.overlay_x !== undefined ? Number(r.overlay_x) : undefined,
@@ -265,8 +314,6 @@ export function usePhotoboothStore() {
             overlayW: r.overlay_w !== null && r.overlay_w !== undefined ? Number(r.overlay_w) : undefined,
             overlayH: r.overlay_h !== null && r.overlay_h !== undefined ? Number(r.overlay_h) : undefined,
             overlayRotation: r.overlay_rotation !== null && r.overlay_rotation !== undefined ? Number(r.overlay_rotation) : undefined,
-            filterId: r.filter_id,
-            allowedStickers: r.allowed_stickers || [],
             forceLayout: r.force_layout ?? true,
           }));
         }
@@ -278,7 +325,6 @@ export function usePhotoboothStore() {
         if (!cfgRow) {
           const metadataOnly = {
             ...migrated,
-            customLayouts: [],
             customFilters: [],
             customStickers: [],
             presetTemplates: [],
@@ -289,7 +335,7 @@ export function usePhotoboothStore() {
         // ── Photos ───────────────────────────────────────────────────────────
         const { data: photoRows, error: photoErr } = await supabase
           .from("photo_strips")
-          .select("id, data_url, customer_name, customer_phone, sessions_count, timestamp")
+          .select("id, data_url, customer_name, customer_phone, sessions_count, timestamp, operator_name, captured_photos, payment_method, amount")
           .order("created_at", { ascending: false });
 
         if (photoErr || !photoRows) {
@@ -302,6 +348,10 @@ export function usePhotoboothStore() {
             customerPhone: row.customer_phone ?? undefined,
             sessionsCount: row.sessions_count ?? undefined,
             timestamp: row.timestamp ?? new Date().toLocaleTimeString(),
+            capturedPhotos: (row as any).captured_photos ?? undefined,
+            operatorName: (row as any).operator_name ?? undefined,
+            paymentMethod: (row as any).payment_method ?? undefined,
+            amount: (row as any).amount ?? undefined,
           }));
           setPhotos(mapped);
           lsSetPhotos(mapped);
@@ -343,7 +393,6 @@ export function usePhotoboothStore() {
     try {
       const metadataOnly = {
         ...newConfig,
-        customLayouts: [],
         customFilters: [],
         customStickers: [],
         presetTemplates: [],
@@ -366,60 +415,17 @@ export function usePhotoboothStore() {
 
   // ── Frame CRUD ────────────────────────────────────────────────────────────
 
-  const addFrame = useCallback((frame: Omit<FrameTemplate, "id">) => {
-    const newFrame: FrameTemplate = { ...frame, id: "frame_" + Date.now() };
-    setConfig((prev) => {
-      const updated = { ...prev, customFrames: [...prev.customFrames, newFrame] };
-      setTimeout(() => saveConfig(updated), 0);
-      return updated;
-    });
-  }, [saveConfig]);
 
-  const updateFrame = useCallback((id: string, fields: Partial<FrameTemplate>) => {
-    setConfig((prev) => {
-      const updatedFrames = prev.customFrames.map((f) => f.id === id ? { ...f, ...fields } : f);
-      const updated = { ...prev, customFrames: updatedFrames };
-      setTimeout(() => saveConfig(updated), 0);
-      return updated;
-    });
-  }, [saveConfig]);
-
-  const deleteFrame = useCallback((id: string) => {
-    setConfig((prev) => {
-      if (prev.activeFrameId === id) {
-        alert("Tidak bisa menghapus bingkai yang sedang aktif digunakan!");
-        return prev;
-      }
-      const updatedFrames = prev.customFrames.filter((f) => f.id !== id);
-      const updated = { ...prev, customFrames: updatedFrames };
-      setTimeout(() => saveConfig(updated), 0);
-      return updated;
-    });
-  }, [saveConfig]);
-
-  const setActiveFrame = useCallback((id: string) => {
-    setConfig((prev) => {
-      const selectedTemplate = prev.customFrames.find((f) => f.id === id);
-      if (!selectedTemplate) return prev;
-      const updated = {
-        ...prev,
-        activeFrameId: id,
-        frameStyle: selectedTemplate.frameStyle,
-        frameText: selectedTemplate.frameText,
-      };
-      setTimeout(() => saveConfig(updated), 0);
-      return updated;
-    });
-  }, [saveConfig]);
 
   // ── Photo CRUD ────────────────────────────────────────────────────────────
 
   const addPhoto = useCallback(async (
     dataUrl: string,
-    metadata?: { customerName: string; customerPhone: string; sessionsCount: number; operatorName?: string }
+    metadata?: { customerName: string; customerPhone: string; sessionsCount: number; operatorName?: string; capturedPhotos?: string[]; paymentMethod?: string; amount?: number }
   ) => {
+    const newId = "strip_" + Date.now();
     const newPhoto: PhotoStrip = {
-      id: "strip_" + Date.now(),
+      id: newId,
       timestamp: new Date().toLocaleTimeString(),
       dataUrl,
       ...metadata,
@@ -427,29 +433,73 @@ export function usePhotoboothStore() {
 
     setPhotos((prev) => {
       const updated = [newPhoto, ...prev];
-      lsSetPhotos(updated);
+      setTimeout(() => lsSetPhotos(updated), 0);
       return updated;
     });
 
     try {
-      await supabase.from("photo_strips").insert({
+      let finalDataUrl = dataUrl;
+      let finalCapturedPhotos = metadata?.capturedPhotos || [];
+
+      // Try uploading the main strip to Supabase Storage
+      try {
+        finalDataUrl = await uploadImageToStorage(dataUrl, `strips/${newId}.png`);
+      } catch (err) {
+        console.warn("[Storage] Failed to upload photo strip, falling back to base64:", err);
+      }
+
+      // Try uploading individual captured photos to Supabase Storage
+      if (metadata?.capturedPhotos && metadata.capturedPhotos.length > 0) {
+        try {
+          const uploadPromises = metadata.capturedPhotos.map((p, idx) =>
+            uploadImageToStorage(p, `raw/${newId}_raw_${idx}.png`)
+          );
+          finalCapturedPhotos = await Promise.all(uploadPromises);
+        } catch (err) {
+          console.warn("[Storage] Failed to upload captured photos, falling back to base64:", err);
+        }
+      }
+
+      const payload: any = {
         id: newPhoto.id,
-        data_url: newPhoto.dataUrl,
+        data_url: finalDataUrl,
         customer_name: metadata?.customerName ?? null,
         customer_phone: metadata?.customerPhone ?? null,
         sessions_count: metadata?.sessionsCount ?? 1,
         operator_name: metadata?.operatorName ?? null,
         timestamp: newPhoto.timestamp,
-      });
+        payment_method: metadata?.paymentMethod ?? null,
+        amount: metadata?.amount ?? null,
+      };
+
+      if (finalCapturedPhotos.length > 0) {
+        payload.captured_photos = finalCapturedPhotos;
+      }
+
+      const { error } = await supabase.from("photo_strips").insert(payload);
+      if (error) {
+        // Fallback jika kolom captured_photos belum ada di Supabase
+        if (error.message?.includes("captured_photos") || error.code === "P0002" || error.code === "42703") {
+          console.warn("Kolom captured_photos tidak ditemukan, melakukan fallback tanpa kolom tersebut...");
+          delete payload.captured_photos;
+          const { error: fallbackErr } = await supabase.from("photo_strips").insert(payload);
+          if (fallbackErr) {
+            console.error("[Supabase] addPhoto fallback error:", fallbackErr);
+          }
+        } else {
+          console.error("[Supabase] addPhoto error:", error);
+        }
+      }
     } catch (err) {
       console.error("[Supabase] addPhoto error:", err);
     }
+    return newId;
   }, []);
 
   const deletePhoto = useCallback(async (id: string) => {
     setPhotos((prev) => {
       const updated = prev.filter((p) => p.id !== id);
-      lsSetPhotos(updated);
+      setTimeout(() => lsSetPhotos(updated), 0);
       return updated;
     });
 
@@ -473,37 +523,7 @@ export function usePhotoboothStore() {
 
   // ── Modular CRUD ──────────────────────────────────────────────────────────
 
-  const addLayoutAsset = useCallback(async (layout: Omit<LayoutAsset, "id">) => {
-    const newLayout: LayoutAsset = { ...layout, id: "layout_" + Date.now() };
-    setConfig((prev) => {
-      const updated = { ...prev, customLayouts: [...(prev.customLayouts || []), newLayout] };
-      setTimeout(() => lsSetConfig(updated), 0);
-      return updated;
-    });
-    try {
-      await supabase.from("layout_assets").insert({
-        id: newLayout.id,
-        name: newLayout.name,
-        count: newLayout.count,
-        description: newLayout.description,
-      });
-    } catch (err) {
-      console.error("[Supabase] addLayoutAsset error:", err);
-    }
-  }, []);
 
-  const deleteLayoutAsset = useCallback(async (id: string) => {
-    setConfig((prev) => {
-      const updated = { ...prev, customLayouts: (prev.customLayouts || []).filter((l) => l.id !== id) };
-      setTimeout(() => lsSetConfig(updated), 0);
-      return updated;
-    });
-    try {
-      await supabase.from("layout_assets").delete().eq("id", id);
-    } catch (err) {
-      console.error("[Supabase] deleteLayoutAsset error:", err);
-    }
-  }, []);
 
   const addFilterAsset = useCallback(async (filter: Omit<FilterAsset, "id">) => {
     const newFilter: FilterAsset = { ...filter, id: "filter_" + Date.now() };
@@ -578,18 +598,13 @@ export function usePhotoboothStore() {
       await supabase.from("preset_templates").insert({
         id: newPreset.id,
         name: newPreset.name,
-        layout_id: newPreset.layoutId,
-        frame_style: newPreset.frameStyle,
-        frame_text: newPreset.frameText,
-        image_overlay: newPreset.imageOverlay,
-        custom_slots: newPreset.customSlots,
-        overlay_x: newPreset.overlayX,
-        overlay_y: newPreset.overlayY,
-        overlay_w: newPreset.overlayW,
-        overlay_h: newPreset.overlayH,
-        overlay_rotation: newPreset.overlayRotation,
-        filter_id: newPreset.filterId,
-        allowed_stickers: newPreset.allowedStickers,
+        image_overlay: newPreset.imageOverlay || null,
+        custom_slots: newPreset.customSlots || null,
+        overlay_x: newPreset.overlayX ?? 0,
+        overlay_y: newPreset.overlayY ?? 0,
+        overlay_w: newPreset.overlayW ?? 100,
+        overlay_h: newPreset.overlayH ?? 100,
+        overlay_rotation: newPreset.overlayRotation ?? 0,
         force_layout: newPreset.forceLayout,
       });
     } catch (err) {
@@ -607,9 +622,6 @@ export function usePhotoboothStore() {
     try {
       await supabase.from("preset_templates").update({
         name: fields.name,
-        layout_id: fields.layoutId,
-        frame_style: fields.frameStyle,
-        frame_text: fields.frameText,
         image_overlay: fields.imageOverlay,
         custom_slots: fields.customSlots,
         overlay_x: fields.overlayX,
@@ -617,8 +629,6 @@ export function usePhotoboothStore() {
         overlay_w: fields.overlayW,
         overlay_h: fields.overlayH,
         overlay_rotation: fields.overlayRotation,
-        filter_id: fields.filterId,
-        allowed_stickers: fields.allowedStickers,
         force_layout: fields.forceLayout,
       }).eq("id", id);
     } catch (err) {
@@ -629,7 +639,7 @@ export function usePhotoboothStore() {
   const deletePresetTemplate = useCallback(async (id: string) => {
     setConfig((prev) => {
       if (prev.activePresetTemplateId === id) {
-        alert("Tidak bisa menghapus preset yang sedang aktif!");
+        toast.error("Tidak bisa menghapus preset yang sedang aktif!");
         return prev;
       }
       const updatedPresets = (prev.presetTemplates || []).filter((p) => p.id !== id);
@@ -654,10 +664,6 @@ export function usePhotoboothStore() {
         activePresetTemplateId: id,
       };
 
-      if (preset) {
-        updated.frameStyle = preset.frameStyle;
-        updated.frameText = preset.frameText;
-      }
       setTimeout(() => saveConfig(updated), 0);
       return updated;
     });
@@ -668,15 +674,9 @@ export function usePhotoboothStore() {
     photos,
     isLoading,
     updateConfig,
-    addFrame,
-    updateFrame,
-    deleteFrame,
-    setActiveFrame,
     addPhoto,
     deletePhoto,
     clearPhotos,
-    addLayoutAsset,
-    deleteLayoutAsset,
     addFilterAsset,
     deleteFilterAsset,
     addStickerAsset,

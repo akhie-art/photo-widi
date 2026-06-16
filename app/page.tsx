@@ -3,17 +3,30 @@
 import { useState, useEffect } from "react";
 import { usePhotoboothStore, PhotoStrip } from "@/app/hooks/usePhotoboothStore";
 import { useRouter } from "next/navigation";
-import { Sun, Moon, Sparkles, Terminal, Camera, ShieldCheck } from "lucide-react";
+import { 
+  Sun, 
+  Moon, 
+  Sparkles, 
+  Terminal, 
+  Camera, 
+  ArrowRight, 
+  Image as ImageIcon,
+  CheckCircle2,
+  Heart,
+  ImagePlay,
+  X
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 export default function LandingPage() {
   const { config, photos } = usePhotoboothStore();
   const router = useRouter();
 
-  const [theme, setTheme] = useState<"dark" | "light">("dark");
+  const [theme, setTheme] = useState<"dark" | "light">("light");
   const [currentOperator, setCurrentOperator] = useState<string | null>(null);
+  const [selectedPhoto, setSelectedPhoto] = useState<PhotoStrip | null>(null);
 
-  // Operator Authorization Check (No redirect, public access allowed)
+  // Operator Authorization Check
   useEffect(() => {
     if (typeof window === "undefined") return;
     const operatorAuth = sessionStorage.getItem("glow_operator_auth");
@@ -41,7 +54,7 @@ export default function LandingPage() {
   const toggleTheme = () => {
     const newTheme = theme === "dark" ? "light" : "dark";
     setTheme(newTheme);
-    localStorage.setItem("glow_theme", newTheme);
+    sessionStorage.setItem("glow_theme", newTheme);
     const root = document.documentElement;
     if (newTheme === "dark") {
       root.classList.add("dark");
@@ -51,230 +64,261 @@ export default function LandingPage() {
   };
 
   return (
-    <div className="flex-1 bg-[#fbfbfb] dark:bg-[#0b0b0c] text-zinc-850 dark:text-[#e3e3e3] font-sans flex flex-col justify-between overflow-x-hidden min-h-screen relative transition-colors duration-300">
-      {/* Visual Ambient Background Glows */}
-      <div className="absolute top-0 left-[-15%] w-[45%] aspect-square rounded-full bg-blue-500/5 blur-[120px] pointer-events-none z-0" />
-      <div className="absolute bottom-[10%] right-[-15%] w-[45%] aspect-square rounded-full bg-indigo-500/5 blur-[120px] pointer-events-none z-0" />
+    <>
+      {/* Custom Keyframes for Floating Illustration Animation */}
+      <style jsx global>{`
+        @keyframes float {
+          0%, 100% { transform: translateY(0) rotate(var(--rotation, 0deg)); }
+          50% { transform: translateY(-20px) rotate(var(--rotation, 0deg)); }
+        }
+        .animate-float {
+          animation: float 6s ease-in-out infinite;
+        }
+        .animate-float-delayed {
+          animation: float 6s ease-in-out 3s infinite;
+        }
+      `}</style>
 
-      <div className="flex-1 flex flex-col z-10 relative">
-        {/* Header */}
-        <header className="w-full border-b border-zinc-200/80 dark:border-zinc-900/60 bg-[#fbfbfb]/80 dark:bg-[#0b0b0c]/60 backdrop-blur-md sticky top-0 z-50 transition-colors duration-300">
-          <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
-            <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center text-white font-black tracking-tighter text-sm shadow-md shadow-blue-500/20">
-                GB
+      <div className="flex-1 bg-[#FFFBF7] dark:bg-slate-950 text-slate-800 dark:text-slate-100 font-sans flex flex-col justify-between overflow-x-hidden min-h-screen relative transition-colors duration-500">
+        
+        {/* Soft Pastel Ambient Glows */}
+        <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden">
+          <div className="absolute -top-[20%] -left-[10%] w-[50%] md:w-[40%] aspect-square rounded-full bg-rose-200/40 dark:bg-rose-900/20 blur-[120px]" />
+          <div className="absolute top-[20%] -right-[10%] w-[45%] aspect-square rounded-full bg-amber-200/30 dark:bg-amber-900/10 blur-[120px]" />
+          <div className="absolute inset-0 bg-[linear-gradient(to_right,#80808008_1px,transparent_1px),linear-gradient(to_bottom,#80808008_1px,transparent_1px)] bg-[size:24px_24px]" />
+        </div>
+
+        <div className="flex-1 flex flex-col z-10 relative">
+          {/* Header */}
+          <header className="w-full border-b border-rose-100/50 dark:border-slate-800/80 bg-[#FFFBF7]/60 dark:bg-slate-950/60 backdrop-blur-xl sticky top-0 z-50 transition-colors duration-300">
+            <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
+              <div className="flex items-center gap-3 cursor-pointer group" onClick={() => router.push("/")}>
+                {config.logoUrl ? (
+                  <div className="w-8 h-8 rounded-xl overflow-hidden bg-zinc-50 dark:bg-zinc-950 flex items-center justify-center border border-rose-100/30 dark:border-slate-800 shrink-0">
+                    <img src={config.logoUrl} alt="Logo" className="w-full h-full object-contain" />
+                  </div>
+                ) : (
+                  <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-rose-400 to-orange-300 flex items-center justify-center text-white font-bold tracking-tighter text-xs shadow-md shadow-rose-200 dark:shadow-none group-hover:scale-105 transition-transform">
+                    GB
+                  </div>
+                )}
+                <span className="font-bold tracking-tight text-sm text-slate-800 dark:text-slate-100">
+                  {config.eventName ? config.eventName.toUpperCase() : "GLOWBOOTH"}
+                </span>
               </div>
-              <span className="font-bold tracking-wider text-sm bg-gradient-to-r from-zinc-800 to-zinc-500 dark:from-white dark:to-zinc-400 bg-clip-text text-transparent font-mono">GLOWBOOTH</span>
+              
+              <div className="flex items-center gap-4 text-sm text-slate-500 dark:text-slate-400">
+                {currentOperator ? (
+                  <div className="hidden sm:flex items-center gap-3 border border-emerald-200/50 dark:border-emerald-900/30 px-3 py-1.5 rounded-full text-xs shadow-sm bg-emerald-50/50 dark:bg-emerald-900/10 text-emerald-700 dark:text-emerald-400">
+                    <span className="flex h-2 w-2 relative">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                    </span>
+                    <span>Operator: <strong className="font-semibold">{currentOperator}</strong></span>
+                    <div className="w-px h-3 bg-emerald-200 dark:bg-emerald-800 mx-1" />
+                    <button
+                      onClick={handleOperatorLogout}
+                      className="hover:text-red-500 dark:hover:text-red-400 font-medium transition-colors"
+                    >
+                      Keluar
+                    </button>
+                  </div>
+                ) : (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => router.push("/login")}
+                    className="hidden sm:flex h-9 rounded-xl text-xs font-semibold border-rose-200/60 dark:border-slate-800 text-rose-500 dark:text-slate-300 hover:bg-rose-50 dark:hover:bg-slate-800"
+                  >
+                    Masuk Sistem
+                  </Button>
+                )}
+                
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={toggleTheme}
+                  className="h-9 w-9 rounded-xl text-slate-500 hover:text-amber-500 dark:hover:text-amber-300 hover:bg-amber-50 dark:hover:bg-slate-800 transition-colors"
+                >
+                  {theme === "dark" ? <Sun className="w-4.5 h-4.5" /> : <Moon className="w-4.5 h-4.5" />}
+                </Button>
+              </div>
+            </div>
+          </header>
+
+          {/* Hero Section */}
+          <div className="max-w-7xl mx-auto px-6 py-16 md:py-24 grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-16 items-center w-full relative z-10">
+            
+            {/* Left Content Column */}
+            <div className="lg:col-span-6 flex flex-col gap-6 text-left order-2 lg:order-1">
+              <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-white/60 dark:bg-slate-900/60 backdrop-blur-md border border-rose-100 dark:border-slate-800 text-xs font-semibold text-rose-500 dark:text-rose-400 w-fit shadow-sm">
+                <Sparkles className="w-4 h-4 text-amber-400" />
+                Virtual Photobooth Experience
+              </div>
+
+              <h1 className="text-5xl md:text-6xl lg:text-7xl font-extrabold tracking-tight text-slate-800 dark:text-white leading-[1.1]">
+                Abadikan Momen <br />
+                <span className="bg-gradient-to-r from-rose-400 via-orange-400 to-amber-400 bg-clip-text text-transparent">Penuh Senyuman.</span>
+              </h1>
+
+              <p className="text-slate-600 dark:text-slate-400 text-base md:text-lg leading-relaxed max-w-xl font-medium">
+                Sesi foto studio instan di <strong className="text-slate-800 dark:text-slate-200">{config.eventName}</strong>. Pilih layout favoritmu, terapkan filter manis, dan bawa pulang kenangannya langsung ke genggamanmu!
+              </p>
+
+              {/* Feature Checklist */}
+              <ul className="space-y-3 mt-2 text-sm font-medium text-slate-600 dark:text-slate-300">
+                <li className="flex items-center gap-3">
+                  <CheckCircle2 className="w-5 h-5 text-rose-400" />
+                  <span>Resolusi tinggi super jernih tanpa batas</span>
+                </li>
+                <li className="flex items-center gap-3">
+                  <CheckCircle2 className="w-5 h-5 text-amber-400" />
+                  <span>Akses puluhan warna & filter pastel estetik</span>
+                </li>
+                <li className="flex items-center gap-3">
+                  <CheckCircle2 className="w-5 h-5 text-sky-400" />
+                  <span>Langsung simpan via scan QR Code pintar</span>
+                </li>
+              </ul>
+            </div>
+
+            {/* Right Illustration Column (CSS Composition) */}
+            <div className="lg:col-span-6 w-full h-[400px] md:h-[500px] relative flex items-center justify-center order-1 lg:order-2">
+              
+              {/* Backglow Circle */}
+              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-64 h-64 md:w-80 md:h-80 bg-gradient-to-tr from-rose-300/60 to-amber-200/60 rounded-full blur-[60px] animate-pulse" />
+
+              <div className="relative w-full max-w-sm h-full flex items-center justify-center perspective-[1000px]">
+                
+                {/* Floating Element 1: Left Photo Strip */}
+                <div 
+                  className="absolute top-[10%] left-0 md:-left-[10%] w-24 h-32 md:w-28 md:h-40 bg-white dark:bg-slate-800 p-2 md:p-3 rounded-xl shadow-2xl z-20 border border-slate-100 dark:border-slate-700 animate-float"
+                  style={{ '--rotation': '-12deg' } as React.CSSProperties}
+                >
+                  <div className="w-full h-[45%] bg-rose-100 dark:bg-slate-700 rounded-lg mb-2" />
+                  <div className="w-full h-[45%] bg-amber-100 dark:bg-slate-700 rounded-lg" />
+                </div>
+
+                {/* Floating Element 2: Right Photo Strip */}
+                <div 
+                  className="absolute bottom-[10%] right-0 md:-right-[10%] w-28 h-36 md:w-32 md:h-44 bg-white dark:bg-slate-800 p-2 md:p-3 rounded-xl shadow-2xl z-30 border border-slate-100 dark:border-slate-700 animate-float-delayed"
+                  style={{ '--rotation': '15deg' } as React.CSSProperties}
+                >
+                  <div className="w-full h-full bg-sky-100 dark:bg-slate-700 rounded-lg flex items-center justify-center">
+                    <ImagePlay className="w-8 h-8 text-sky-400/50" />
+                  </div>
+                </div>
+
+                {/* Central Object: 3D Camera / Booth Icon */}
+                <div className="relative z-20 w-48 h-48 md:w-56 md:h-56 bg-white/70 dark:bg-slate-800/70 backdrop-blur-xl border-2 border-white dark:border-slate-600 rounded-[2.5rem] shadow-[0_20px_60px_-15px_rgba(251,113,133,0.3)] dark:shadow-none flex items-center justify-center transform transition-transform hover:scale-105 duration-500">
+                  
+                  {/* Status indicator */}
+                  <div className="absolute top-5 right-5 flex items-center gap-1.5 bg-white/80 dark:bg-slate-700 px-2.5 py-1 rounded-full shadow-sm">
+                    <div className={`w-2 h-2 rounded-full ${currentOperator ? 'bg-emerald-400' : 'bg-slate-400'} animate-pulse`} />
+                    <span className="text-[9px] font-bold text-slate-600 dark:text-slate-300">REC</span>
+                  </div>
+
+                  {/* Camera Lens */}
+                  <div className="w-24 h-24 md:w-28 md:h-28 rounded-full bg-gradient-to-br from-rose-400 via-orange-300 to-amber-300 flex items-center justify-center shadow-inner">
+                    <div className="w-16 h-16 md:w-20 md:h-20 rounded-full bg-slate-900/10 flex items-center justify-center border-4 border-white/30 backdrop-blur-sm">
+                      <Camera className="w-8 h-8 md:w-10 md:h-10 text-white" />
+                    </div>
+                  </div>
+
+                  {/* Aesthetic Lines */}
+                  <div className="absolute bottom-5 left-1/2 -translate-x-1/2 w-12 h-1.5 bg-slate-200 dark:bg-slate-600 rounded-full" />
+                </div>
+
+                {/* Decorative Accents */}
+                <Sparkles className="absolute top-[5%] right-[15%] w-8 h-8 text-amber-400 animate-bounce" />
+                <Heart className="absolute bottom-[20%] left-[5%] w-6 h-6 text-rose-400 animate-pulse" />
+              </div>
             </div>
             
-            <div className="flex items-center gap-4 text-xs text-zinc-500 dark:text-zinc-400">
-              {currentOperator ? (
-                <div className="inline-flex items-center gap-2 bg-zinc-100 dark:bg-zinc-900/80 border border-zinc-200 dark:border-zinc-800/85 px-3 py-1 rounded-xl text-[10px] text-zinc-650 dark:text-zinc-350 shadow-sm transition-all">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                  Operator: <strong className="text-zinc-850 dark:text-zinc-100">{currentOperator}</strong>
-                  <span className="mx-1 text-zinc-300 dark:text-zinc-800 font-light">|</span>
-                  <button
-                    type="button"
-                    onClick={handleOperatorLogout}
-                    className="text-red-500 dark:text-red-400 hover:text-red-600 dark:hover:text-red-300 cursor-pointer font-semibold transition-colors focus:outline-none"
-                  >
-                    Keluar
-                  </button>
-                </div>
-              ) : (
-                <Button
-                  onClick={() => router.push("/login?redirect=/")}
-                  className="bg-blue-600 hover:bg-blue-500 text-white font-semibold px-4.5 py-1.5 rounded-xl text-[10px] shadow-sm transition-all border-none cursor-pointer tracking-wider uppercase"
-                >
-                  Masuk Sistem
-                </Button>
-              )}
-
-              <span className="hidden sm:inline-flex items-center gap-1.5 h-4 text-xs font-mono">
-                Total Sesi: <strong className="text-blue-600 dark:text-blue-400 font-mono ml-1">{photos.length}</strong>
-              </span>
-              
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                onClick={toggleTheme}
-                className="w-9 h-9 rounded-xl hover:bg-zinc-150 dark:hover:bg-zinc-900 text-zinc-500 dark:text-zinc-400 hover:text-zinc-850 dark:hover:text-zinc-100 transition-colors cursor-pointer border border-zinc-200/20 dark:border-zinc-800/20 shadow-sm"
-              >
-                {theme === "dark" ? (
-                  <Sun className="w-4.5 h-4.5 text-amber-500 animate-scale-up" />
-                ) : (
-                  <Moon className="w-4.5 h-4.5 text-indigo-500 animate-scale-up" />
-                )}
-              </Button>
-            </div>
-          </div>
-        </header>
-
-        {/* Hero Section */}
-        <div className="max-w-7xl mx-auto px-6 py-12 md:py-20 grid grid-cols-1 lg:grid-cols-12 gap-12 items-center w-full flex-1">
-          <div className="lg:col-span-7 flex flex-col gap-6 text-left">
-            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-blue-50 dark:bg-blue-950/40 border border-blue-100 dark:border-blue-900/30 text-[10px] text-blue-600 dark:text-blue-400 font-semibold uppercase tracking-wider w-fit">
-              <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
-              Virtual Photobooth Experience
-            </div>
-
-            <h1 className="text-4xl sm:text-5xl md:text-6xl font-black text-zinc-900 dark:text-[#e3e3e3] tracking-tight leading-[1.05] bg-gradient-to-br from-zinc-900 via-zinc-850 to-zinc-500 dark:from-white dark:via-white dark:to-zinc-650 bg-clip-text text-transparent">
-              Abadikan <span className="bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500 dark:from-blue-400 dark:via-indigo-400 dark:to-purple-400 bg-clip-text text-transparent">Momen Terbaik</span> Anda Bersama Kami.
-            </h1>
-
-            <p className="text-zinc-655 dark:text-zinc-400 text-xs sm:text-sm md:text-base leading-relaxed max-w-xl">
-              Selamat datang di <strong className="text-zinc-850 dark:text-zinc-200">{config.eventName}</strong>! Ambil foto estetik dengan pilihan filter premium dan bingkai eksklusif langsung menggunakan kamera Anda. Cukup registrasi, lakukan pembayaran, dan unduh hasilnya secara instan!
-            </p>
-
-            {/* Event Meta Details Card */}
-            <div className="grid grid-cols-3 gap-4 bg-zinc-100/40 dark:bg-zinc-950/40 p-5 rounded-2xl border border-zinc-200 dark:border-zinc-900 w-full max-w-xl mt-2 shadow-inner transition-colors duration-300">
-              <div>
-                <span className="text-[10px] text-zinc-400 dark:text-zinc-555 font-mono uppercase tracking-wider block font-semibold">TANGGAL</span>
-                <span className="text-xs font-semibold text-zinc-800 dark:text-zinc-300 mt-1 block">{config.date || "15 Juni 2026"}</span>
-              </div>
-              <div className="border-l border-zinc-200 dark:border-zinc-900/80 pl-4">
-                <span className="text-[10px] text-zinc-400 dark:text-zinc-555 font-mono uppercase tracking-wider block font-semibold">WAKTU</span>
-                <span className="text-xs font-semibold text-zinc-800 dark:text-zinc-300 mt-1 block">{config.time || "18:00"} WIB</span>
-              </div>
-              <div className="border-l border-zinc-200 dark:border-zinc-900/80 pl-4">
-                <span className="text-[10px] text-zinc-400 dark:text-zinc-555 font-mono uppercase tracking-wider block font-semibold">LOKASI</span>
-                <span className="text-xs font-semibold text-zinc-800 dark:text-zinc-300 mt-1 block truncate">{config.location || "Radiant Hall"}</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Interactive Promo / Action Card */}
-          <div className="lg:col-span-5 flex justify-center w-full">
-            <div className="max-w-md w-full bg-white/70 dark:bg-zinc-900/40 backdrop-blur-xl border border-zinc-200/80 dark:border-zinc-850 rounded-3xl p-8 text-center flex flex-col items-center gap-6 shadow-2xl relative overflow-hidden group transition-all duration-300">
-              <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-blue-500/0 via-blue-500/35 to-blue-500/0" />
-              
-              <div className="w-14 h-14 rounded-full bg-blue-50 dark:bg-blue-950 border border-blue-100 dark:border-blue-900/30 flex items-center justify-center text-blue-500 shadow-inner group-hover:scale-105 transition-transform duration-300">
-                <Camera className="w-6.5 h-6.5 text-blue-500" strokeWidth={1.5} />
-              </div>
-
-              <div>
-                <h2 className="text-xl font-bold text-zinc-900 dark:text-[#e3e3e3] tracking-tight">
-                  Studio Foto Aktif
-                </h2>
-                <p className="text-zinc-550 dark:text-zinc-400 text-xs mt-1.5 leading-relaxed">
-                  Sesi foto dipandu langsung oleh operator booth di lokasi. Silakan mendaftar ke operator untuk memulai foto.
-                </p>
-              </div>
-
-              {currentOperator ? (
-                <div className="w-full bg-zinc-50/50 dark:bg-zinc-950/40 p-5 rounded-2xl border border-zinc-200/80 dark:border-zinc-800/60 flex flex-col gap-4 items-center">
-                  <div className="flex items-center gap-2 text-xs font-semibold text-emerald-600 dark:text-emerald-450 bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-100 dark:border-emerald-900/30 px-4 py-2 rounded-xl w-full justify-center">
-                    <ShieldCheck className="w-4 h-4" />
-                    <span>Operator Aktif: {currentOperator}</span>
-                  </div>
-                  <Button
-                    onClick={() => router.push("/operator")}
-                    className="w-full bg-gradient-to-r from-blue-600 to-indigo-650 hover:from-blue-500 hover:to-indigo-550 text-white font-semibold py-3.5 rounded-xl transition-all text-xs tracking-wider uppercase cursor-pointer shadow-lg shadow-blue-900/20"
-                  >
-                    Buka Panel Operator
-                  </Button>
-                </div>
-              ) : (
-                <div className="w-full flex flex-col gap-3">
-                  <Button
-                    onClick={() => router.push("/login?redirect=/operator")}
-                    className="w-full bg-gradient-to-r from-blue-600 to-indigo-650 hover:from-blue-500 hover:to-indigo-550 text-white font-semibold py-3.5 rounded-xl transition-all text-xs tracking-wider uppercase cursor-pointer shadow-lg shadow-blue-900/20"
-                  >
-                    Masuk sebagai Operator
-                  </Button>
-                  <p className="text-[10px] text-zinc-400 dark:text-zinc-500 font-mono">
-                    *Butuh hak akses operator untuk mendaftarkan pengunjung.
-                  </p>
-                </div>
-              )}
-            </div>
           </div>
         </div>
 
-        {/* Steps Section */}
-        <section className="w-full border-t border-zinc-200/80 dark:border-zinc-900/40 py-16 bg-zinc-50/50 dark:bg-[#09090a]/50 transition-colors duration-300">
-          <div className="max-w-7xl mx-auto px-6 text-center flex flex-col gap-10">
-            <div>
-              <span className="text-[10px] text-blue-655 dark:text-blue-500 font-mono uppercase tracking-wider font-bold">CARA KERJA</span>
-              <h2 className="text-2xl sm:text-3xl font-bold text-zinc-800 dark:text-zinc-200 mt-2 tracking-tight">4 Langkah Praktis Foto Strip Anda</h2>
+        {/* Features / Workflow Section */}
+        <section className="w-full py-24 bg-white/50 dark:bg-slate-900/30 border-t border-rose-50 dark:border-slate-800/50 relative z-10 backdrop-blur-sm">
+          <div className="max-w-7xl mx-auto px-6">
+            <div className="mb-16 text-center md:text-left">
+              <span className="text-xs font-bold text-rose-400 uppercase tracking-widest block mb-2">Cara Kerja</span>
+              <h2 className="text-3xl md:text-4xl font-extrabold tracking-tight text-slate-800 dark:text-white">Empat Langkah Seru.</h2>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-              <div className="bg-white dark:bg-zinc-950/30 border border-zinc-200/80 dark:border-zinc-900/60 p-6 rounded-2xl text-left flex flex-col gap-3 group hover:border-zinc-300 dark:hover:border-zinc-800 transition-all shadow-xl">
-                <div className="w-10 h-10 rounded-xl bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 border border-blue-100 dark:border-blue-900/30 flex items-center justify-center font-mono font-bold text-sm shadow-inner group-hover:scale-105 transition-transform duration-300">
-                  01
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
+              {[
+                { step: "01", color: "rose", title: "Daftar Dulu", desc: "Sebutkan nama dan pilih jumlah sesimu ke kakak operator." },
+                { step: "02", color: "amber", title: "Siapkan Pose", desc: "Selesaikan pembayaran praktis via QRIS, lalu bersiaplah." },
+                { step: "03", color: "sky", title: "Say Cheese!", desc: "Pilih bingkai lucu, pakai filter favorit, dan mulai bergaya." },
+                { step: "04", color: "fuchsia", title: "Simpan & Share", desc: "Tulis namamu di foto dan unduh langsung ke HP kamu!" }
+              ].map((item, idx) => (
+                <div key={item.step} className="flex flex-col gap-5 p-6 rounded-3xl bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 shadow-sm hover:shadow-lg hover:-translate-y-1 transition-all duration-300">
+                  <div className={`w-12 h-12 rounded-full flex items-center justify-center font-bold text-lg bg-${item.color}-100 text-${item.color}-500 dark:bg-slate-800 dark:text-${item.color}-400`}>
+                    {idx + 1}
+                  </div>
+                  <div>
+                    <h4 className="text-lg font-bold text-slate-800 dark:text-slate-100">{item.title}</h4>
+                    <p className="text-sm font-medium text-slate-500 mt-2 leading-relaxed">{item.desc}</p>
+                  </div>
                 </div>
-                <div>
-                  <h4 className="text-sm font-bold text-zinc-855 dark:text-zinc-200">Registrasi Sesi</h4>
-                  <p className="text-[11px] text-zinc-605 dark:text-zinc-550 mt-1.5 leading-relaxed font-sans">Masukkan nama, nomor WhatsApp, dan jumlah sesi foto strip yang Anda inginkan.</p>
-                </div>
-              </div>
-
-              <div className="bg-white dark:bg-zinc-950/30 border border-zinc-200/80 dark:border-zinc-900/60 p-6 rounded-2xl text-left flex flex-col gap-3 group hover:border-zinc-300 dark:hover:border-zinc-800 transition-all shadow-xl">
-                <div className="w-10 h-10 rounded-xl bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 border border-indigo-100 dark:border-indigo-900/30 flex items-center justify-center font-mono font-bold text-sm shadow-inner group-hover:scale-105 transition-transform duration-300">
-                  02
-                </div>
-                <div>
-                  <h4 className="text-sm font-bold text-zinc-855 dark:text-zinc-200">Selesaikan Pembayaran</h4>
-                  <p className="text-[11px] text-zinc-605 dark:text-zinc-555 mt-1.5 leading-relaxed font-sans">Pilih bayar otomatis scan QRIS atau bayar tunai ke operator booth di tempat.</p>
-                </div>
-              </div>
-
-              <div className="bg-white dark:bg-zinc-950/30 border border-zinc-200/80 dark:border-zinc-900/60 p-6 rounded-2xl text-left flex flex-col gap-3 group hover:border-zinc-300 dark:hover:border-zinc-800 transition-all shadow-xl">
-                <div className="w-10 h-10 rounded-xl bg-purple-55 dark:bg-purple-950/40 text-purple-600 dark:text-purple-400 border border-purple-100 dark:border-purple-900/30 flex items-center justify-center font-mono font-bold text-sm shadow-inner group-hover:scale-105 transition-transform duration-300">
-                  03
-                </div>
-                <div>
-                  <h4 className="text-sm font-bold text-zinc-855 dark:text-zinc-200">Pose & Jepret Kamera</h4>
-                  <p className="text-[11px] text-zinc-605 dark:text-zinc-555 mt-1.5 leading-relaxed font-sans">Pilih layout strip/grid, aktifkan filter neon, vintage, atau retro, lalu mulailah berpose.</p>
-                </div>
-              </div>
-
-              <div className="bg-white dark:bg-zinc-950/30 border border-zinc-200/80 dark:border-zinc-900/60 p-6 rounded-2xl text-left flex flex-col gap-3 group hover:border-zinc-300 dark:hover:border-zinc-800 transition-all shadow-xl">
-                <div className="w-10 h-10 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-650 dark:text-emerald-400 border border-emerald-100 dark:border-emerald-900/30 flex items-center justify-center font-mono font-bold text-sm shadow-inner group-hover:scale-105 transition-transform duration-300">
-                  04
-                </div>
-                <div>
-                  <h4 className="text-sm font-bold text-zinc-855 dark:text-zinc-200">Kustomisasi & Unduh</h4>
-                  <p className="text-[11px] text-zinc-605 dark:text-zinc-555 mt-1.5 leading-relaxed font-sans">Ubah teks bingkai footer, ganti tema warna/overlay bingkai, dan unduh foto strip Anda.</p>
-                </div>
-              </div>
+              ))}
             </div>
           </div>
         </section>
 
-        {/* Live Gallery Section */}
-        <section className="w-full border-t border-zinc-200/80 dark:border-zinc-900/40 py-16 bg-white dark:bg-[#0b0b0c] transition-colors duration-300">
-          <div className="max-w-7xl mx-auto px-6 text-center flex flex-col gap-10">
-            <div>
-              <span className="text-[10px] text-indigo-500 dark:text-indigo-400 font-mono uppercase tracking-wider font-bold">GALERI LIVE EVENT</span>
-              <h2 className="text-2xl sm:text-3xl font-bold text-zinc-800 dark:text-zinc-200 mt-2 tracking-tight">Keseruan dari Pengunjung Lain</h2>
+        {/* Minimalist Gallery Section */}
+        <section className="w-full py-24 bg-[#FFFBF7] dark:bg-slate-950 relative z-10">
+          <div className="max-w-7xl mx-auto px-6">
+            <div className="mb-12 flex flex-col md:flex-row md:items-end justify-between gap-4">
+              <div>
+                 <span className="text-xs font-bold text-sky-400 uppercase tracking-widest block mb-2">Papan Cerita</span>
+                <h2 className="text-3xl md:text-4xl font-extrabold tracking-tight text-slate-800 dark:text-white">Galeri Hari Ini.</h2>
+              </div>
+              <div className="inline-flex items-center gap-2 bg-white dark:bg-slate-900 px-4 py-2 rounded-full border border-slate-100 dark:border-slate-800 text-sm text-slate-600 font-bold shadow-sm w-fit">
+                <ImageIcon className="w-4 h-4 text-sky-400" />
+                {photos.length} Momen Tersimpan
+              </div>
             </div>
 
             {photos.length === 0 ? (
-              <div className="py-12 border border-dashed border-zinc-200 dark:border-zinc-900 rounded-2xl flex flex-col items-center justify-center gap-3 bg-zinc-50 dark:bg-zinc-950/10">
-                <p className="text-xs text-zinc-500 font-mono">Belum ada foto yang diambil di event ini.</p>
-                <p className="text-[10px] text-zinc-400 dark:text-zinc-650 max-w-[240px] leading-relaxed">Jadilah yang pertama untuk mengambil foto strip dan memajangnya di sini!</p>
+              <div className="py-24 border-2 border-dashed border-rose-200 dark:border-slate-800 rounded-3xl flex flex-col items-center justify-center gap-4 bg-white/50 dark:bg-slate-900/20">
+                <div className="w-16 h-16 rounded-full bg-rose-50 dark:bg-slate-800/50 flex items-center justify-center">
+                  <Heart className="w-8 h-8 text-rose-300" />
+                </div>
+                <div className="text-center">
+                  <p className="text-base font-bold text-slate-700 dark:text-slate-200">Belum ada foto nih!</p>
+                  <p className="text-sm font-medium text-slate-500 mt-1">Ayo jadi yang pertama memajang senyummu di sini.</p>
+                </div>
               </div>
             ) : (
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-6">
+              <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-6">
                 {photos.slice(0, 10).map((photo: PhotoStrip) => (
-                  <div key={photo.id} className="group flex flex-col bg-zinc-50/50 dark:bg-zinc-950/30 border border-zinc-200 dark:border-zinc-900/60 p-3 rounded-2xl relative overflow-hidden transition-all duration-300 hover:border-zinc-305 dark:hover:border-zinc-800 hover:scale-[1.02] shadow-xl">
-                    <div className="aspect-[2/3.5] rounded-xl overflow-hidden bg-zinc-900 relative">
-                      <img
-                        src={photo.dataUrl}
-                        alt={photo.customerName || "Photostrip"}
-                        className="w-full h-full object-cover rounded-xl"
-                      />
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col justify-end p-3 text-left">
-                        <span className="text-[10px] font-bold text-zinc-200 truncate">{photo.customerName || "Anonymous"}</span>
-                        <span className="text-[8px] text-zinc-400 mt-0.5 font-mono">{photo.timestamp}</span>
-                      </div>
+                  <div key={photo.id} className="group flex flex-col gap-3 p-2.5 bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm hover:shadow-xl hover:shadow-rose-100/50 dark:hover:shadow-none transition-all duration-300">
+                    <div className="aspect-[2/3.5] rounded-xl overflow-hidden bg-slate-100 dark:bg-slate-800 relative flex items-center justify-center">
+                      {photo.dataUrl ? (
+                        <>
+                          <img
+                            src={photo.dataUrl}
+                            alt={photo.customerName || "Photostrip"}
+                            className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                          />
+                          <div className="absolute inset-0 bg-slate-900/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center backdrop-blur-[2px]">
+                            <Button 
+                              onClick={() => setSelectedPhoto(photo)}
+                              className="h-9 bg-white text-slate-800 hover:bg-rose-50 hover:text-rose-500 text-xs font-bold rounded-full shadow-lg cursor-pointer"
+                            >
+                              Lihat Jelas
+                            </Button>
+                          </div>
+                        </>
+                      ) : (
+                        <div className="w-6 h-6 rounded-full border-2 border-rose-500/20 border-t-rose-500 animate-spin" />
+                      )}
                     </div>
-                    <div className="mt-2.5 text-left truncate px-1">
-                      <p className="text-[10px] font-bold text-zinc-800 dark:text-[#e3e3e3] truncate">{photo.customerName || "Anonymous"}</p>
-                      <p className="text-[8px] text-zinc-550 dark:text-zinc-500 font-mono mt-0.5">{photo.sessionsCount || 1} Sesi Foto</p>
+                    <div className="px-1 text-center">
+                      <p className="text-sm font-bold text-slate-800 dark:text-slate-100 truncate">{photo.customerName || "Si Manis"}</p>
+                      <p className="text-[11px] font-medium text-slate-500 mt-0.5">{photo.timestamp}</p>
                     </div>
                   </div>
                 ))}
@@ -284,13 +328,57 @@ export default function LandingPage() {
         </section>
 
         {/* Footer */}
-        <footer className="w-full border-t border-zinc-200/60 dark:border-zinc-900/40 py-8 text-center text-[10px] text-zinc-500 dark:text-zinc-600 bg-zinc-100/40 dark:bg-black/40 transition-colors duration-300">
-          <div className="max-w-7xl mx-auto px-6 flex flex-col sm:flex-row items-center justify-between gap-4 font-mono">
-            <span>&copy; {new Date().getFullYear()} GLOWBOOTH. All rights reserved.</span>
-            <span>Powered by Advanced Supabase Client Integration</span>
+        <footer className="w-full border-t border-rose-100/50 dark:border-slate-800/80 py-8 bg-white/40 dark:bg-slate-950 text-slate-500 relative z-10 font-medium">
+          <div className="max-w-7xl mx-auto px-6 flex flex-col md:flex-row items-center justify-between gap-4 text-[13px]">
+            <p>&copy; {new Date().getFullYear()} {config.eventName ? config.eventName.toUpperCase() : "GLOWBOOTH"} Ecosystem. Made with <Heart className="w-3.5 h-3.5 inline text-rose-400" />.</p>
+            <div className="flex items-center gap-2">
+              <Terminal className="w-4 h-4 text-sky-400" />
+              <span>Sistem Infrastruktur Berjalan Lokal</span>
+            </div>
           </div>
         </footer>
       </div>
-    </div>
+
+      {/* Premium Photo Strip Preview Modal */}
+      {selectedPhoto && (
+        <div 
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 dark:bg-slate-950/80 backdrop-blur-sm transition-opacity duration-300"
+          onClick={() => setSelectedPhoto(null)}
+        >
+          <div 
+            className="bg-white dark:bg-zinc-900 border border-slate-100 dark:border-zinc-800 rounded-3xl p-6 max-w-sm w-full shadow-2xl relative flex flex-col items-center gap-4 animate-in fade-in zoom-in-95 duration-200"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Close Button */}
+            <button
+              onClick={() => setSelectedPhoto(null)}
+              className="absolute top-4 right-4 p-2 hover:bg-slate-100 dark:hover:bg-zinc-800 rounded-full text-slate-500 hover:text-slate-800 dark:hover:text-white transition-colors cursor-pointer border-none bg-transparent"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            {/* Title */}
+            <div className="text-center w-full mt-2 select-none">
+              <h3 className="text-base font-bold text-slate-900 dark:text-slate-100 truncate px-8">
+                {selectedPhoto.customerName || "Tamu"}
+              </h3>
+              <p className="text-xs text-slate-400 dark:text-slate-500 font-mono mt-1">
+                {selectedPhoto.timestamp}
+              </p>
+            </div>
+
+            {/* Photo Strip Image */}
+            <div className="relative rounded-2xl border border-slate-100 dark:border-zinc-800 shadow-md overflow-hidden bg-slate-50 dark:bg-zinc-950 max-h-[50vh] aspect-[500/1202.5] w-[160px] flex items-center justify-center">
+              <img
+                src={selectedPhoto.dataUrl}
+                alt={selectedPhoto.customerName || "Photostrip"}
+                className="w-full h-full object-contain"
+              />
+            </div>
+
+          </div>
+        </div>
+      )}
+    </>
   );
 }
