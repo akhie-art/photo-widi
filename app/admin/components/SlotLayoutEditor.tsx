@@ -119,8 +119,15 @@ export default function SlotLayoutEditor({
   const [guides, setGuides] = useState<{ x?: number; y?: number }>({});
   
   const [zoom, setZoom] = useState(1);
+  const zoomRef = useRef(zoom);
+  useEffect(() => {
+    zoomRef.current = zoom;
+  }, [zoom]);
 
-  // Wheel zoom gesture handler (Touchpad pinch / Ctrl + Scroll)
+  const touchStartDist = useRef<number>(0);
+  const touchStartZoom = useRef<number>(1);
+
+  // Wheel & Touch Pinch-to-Zoom gesture handler
   useEffect(() => {
     const scrollContainer = scrollContainerRef.current;
     if (!scrollContainer) return;
@@ -136,9 +143,46 @@ export default function SlotLayoutEditor({
       }
     };
 
+    const handleTouchStart = (e: TouchEvent) => {
+      if (e.touches.length === 2) {
+        e.preventDefault();
+        const t1 = e.touches[0];
+        const t2 = e.touches[1];
+        touchStartDist.current = Math.hypot(t1.clientX - t2.clientX, t1.clientY - t2.clientY);
+        touchStartZoom.current = zoomRef.current;
+      }
+    };
+
+    const handleTouchMove = (e: TouchEvent) => {
+      if (e.touches.length === 2 && touchStartDist.current > 0) {
+        e.preventDefault();
+        const t1 = e.touches[0];
+        const t2 = e.touches[1];
+        const dist = Math.hypot(t1.clientX - t2.clientX, t1.clientY - t2.clientY);
+        const factor = dist / touchStartDist.current;
+        setZoom(() => {
+          const nextZoom = touchStartZoom.current * factor;
+          return Math.max(0.2, Math.min(3, nextZoom));
+        });
+      }
+    };
+
+    const handleTouchEnd = () => {
+      touchStartDist.current = 0;
+    };
+
     scrollContainer.addEventListener("wheel", handleWheel, { passive: false });
+    scrollContainer.addEventListener("touchstart", handleTouchStart, { passive: false });
+    scrollContainer.addEventListener("touchmove", handleTouchMove, { passive: false });
+    scrollContainer.addEventListener("touchend", handleTouchEnd);
+    scrollContainer.addEventListener("touchcancel", handleTouchEnd);
+
     return () => {
       scrollContainer.removeEventListener("wheel", handleWheel);
+      scrollContainer.removeEventListener("touchstart", handleTouchStart);
+      scrollContainer.removeEventListener("touchmove", handleTouchMove);
+      scrollContainer.removeEventListener("touchend", handleTouchEnd);
+      scrollContainer.removeEventListener("touchcancel", handleTouchEnd);
     };
   }, []);
   const [localOverlayZ, setLocalOverlayZ] = useState(slots.length);
@@ -620,6 +664,41 @@ export default function SlotLayoutEditor({
     saveSnapshot({ ...latestState.current, slots: newSlots, overlayZIndex: newZ });
   };
 
+  const handleTouchMoveLayer = (e: React.TouchEvent, layerId: string) => {
+    if (!draggedLayerId) return;
+
+    const touch = e.touches[0];
+    const targetEl = document.elementFromPoint(touch.clientX, touch.clientY);
+    if (!targetEl) return;
+
+    const targetCard = targetEl.closest("[data-layer-id]");
+    if (!targetCard) return;
+
+    const targetId = targetCard.getAttribute("data-layer-id");
+    if (targetId && targetId !== draggedLayerId) {
+      const sourceUiIndex = uiLayers.findIndex(l => l.id === draggedLayerId);
+      const targetUiIndex = uiLayers.findIndex(l => l.id === targetId);
+
+      if (sourceUiIndex !== -1 && targetUiIndex !== -1 && sourceUiIndex !== targetUiIndex) {
+        const newUiLayers = [...uiLayers];
+        const [moved] = newUiLayers.splice(sourceUiIndex, 1);
+        newUiLayers.splice(targetUiIndex, 0, moved);
+
+        const newStack = [...newUiLayers].reverse();
+        const newSlots: SlotConfig[] = [];
+        let newZ = newStack.length - 1;
+
+        newStack.forEach((item, index) => {
+          if (item.type === 'slot' && item.data) newSlots.push(item.data);
+          if (item.type === 'overlay') newZ = index;
+        });
+
+        onChange(newSlots);
+        updateOverlayZ(newZ);
+      }
+    }
+  };
+
   return (
     <div className="flex flex-col md:flex-row gap-5 w-full h-full">
       {/* KIRI: Kanvas & Kontrol */}
@@ -863,6 +942,7 @@ export default function SlotLayoutEditor({
             return (
               <div
                 key={layer.id}
+                data-layer-id={layer.id}
                 draggable
                 onDragStart={(e) => handleDragStartLayer(e, layer.id)}
                 onDragEnter={(e) => { e.preventDefault(); setDragOverId(layer.id); }}
@@ -870,6 +950,19 @@ export default function SlotLayoutEditor({
                 onDragLeave={(e) => { e.preventDefault(); if (dragOverId === layer.id) setDragOverId(null); }}
                 onDrop={(e) => handleDropLayer(e, layer.id)}
                 onDragEnd={() => {
+                  setDraggedLayerId(null);
+                  setDragOverId(null);
+                }}
+                onTouchStart={() => {
+                  setDraggedLayerId(layer.id);
+                }}
+                onTouchMove={(e) => handleTouchMoveLayer(e, layer.id)}
+                onTouchEnd={() => {
+                  setDraggedLayerId(null);
+                  setDragOverId(null);
+                  saveSnapshot();
+                }}
+                onTouchCancel={() => {
                   setDraggedLayerId(null);
                   setDragOverId(null);
                 }}
@@ -886,6 +979,10 @@ export default function SlotLayoutEditor({
                   isSelected ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-500 ring-1 ring-blue-500/50' :
                   'bg-zinc-50 dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 hover:border-zinc-300 dark:hover:border-zinc-700'
                 } ${isOver ? 'ring-2 ring-blue-500 ring-offset-1 z-10 border-transparent shadow-md' : ''}`}
+                style={{
+                  touchAction: "none",
+                  WebkitTouchCallout: "none"
+                }}
               >
                 {/* Grip Handle */}
                 <GripVertical className="pointer-events-none w-4 h-4 text-zinc-400 shrink-0" />
