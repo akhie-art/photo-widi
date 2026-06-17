@@ -106,7 +106,7 @@ export function useStickerInteraction({
       // Scale
       const dist = Math.hypot(dx, dy);
       const scaleFactor = dist / inter.startDist;
-      const newScalePct = Math.max(5, Math.min(60, inter.startScalePct * scaleFactor));
+      const newScalePct = Math.max(5, inter.startScalePct * scaleFactor);
 
       onUpdateSticker && onUpdateSticker(inter.stickerId, {
         rotation: newRotation,

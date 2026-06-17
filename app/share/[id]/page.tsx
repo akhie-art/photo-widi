@@ -242,14 +242,35 @@ export default function PublicSharePage() {
       <div className="absolute bottom-[-10%] right-[-10%] w-[50%] aspect-square rounded-full bg-pink-400/8 dark:bg-pink-500/5 blur-[120px] pointer-events-none z-0" />
 
       {/* Main Container */}
-      <main className="flex-1 flex flex-col items-center justify-center w-full z-10 relative py-12 px-4">
+      <main className="flex-1 flex flex-col w-full z-10 relative p-4 sm:p-6 md:p-8">
         {isLoading ? (
-          <div className="flex flex-col items-center gap-3 text-zinc-500 font-mono text-xs">
+          <div className="flex-1 flex flex-col items-center justify-center gap-3 text-zinc-500 font-mono text-xs">
             <Loader2 className="w-8 h-8 text-emerald-500 animate-spin" />
             <span>Memuat Kenangan Indah Anda...</span>
           </div>
         ) : photoData ? (
-          <div className="max-w-5xl w-full bg-white dark:bg-[#121214] border border-zinc-200/50 dark:border-zinc-900 rounded-3xl p-6 shadow-2xl transition-all">
+          <div className="w-full flex-1 flex flex-col justify-between transition-all">
+            {/* Header / Nav Panel */}
+            <div className="w-full flex items-center justify-between mb-6">
+              <div className="flex flex-col text-left">
+                <h1 className="text-xl sm:text-2xl font-bold tracking-tight bg-gradient-to-r from-zinc-900 via-zinc-800 to-zinc-700 dark:from-white dark:via-zinc-200 dark:to-zinc-400 bg-clip-text text-transparent">
+                  {eventName}
+                </h1>
+                <p className="text-xs text-zinc-400 dark:text-zinc-500 font-medium">
+                  Unduh dan simpan momen spesial Anda
+                </p>
+              </div>
+              
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => router.push("/")}
+                className="text-xs text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-100 flex items-center gap-1.5 rounded-xl border border-zinc-200/50 dark:border-zinc-800/80 bg-white/50 dark:bg-zinc-900/50 backdrop-blur-sm shadow-sm"
+              >
+                <ArrowLeft className="w-3.5 h-3.5" />
+                <span>Beranda</span>
+              </Button>
+            </div>
             
             {/* Global Actions Panel (ZIP Download) */}
             <div className="w-full bg-zinc-50/50 dark:bg-zinc-950/20 border border-zinc-100 dark:border-zinc-900/80 rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-4 mb-6">
@@ -289,7 +310,7 @@ export default function PublicSharePage() {
             <div className={`grid gap-4 w-full ${
               assets.length === 1 
                 ? "grid-cols-1 max-w-sm mx-auto" 
-                : "grid-cols-2 sm:grid-cols-3 md:grid-cols-4"
+                : "grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6"
             }`}>
               {assets.map((asset) => (
                 <div
@@ -509,11 +530,47 @@ const generateSlideshowVideo = async (photos: string[]): Promise<VideoResult> =>
             width: canvas.width,
             height: canvas.height,
           },
-          fastStart: "fragmented"
+          fastStart: "in-memory"
         });
 
+        let cachedDecoderConfig: any = null;
         const encoder = new VideoEncoderClass({
-          output: (chunk: any, meta: any) => muxer.addVideoChunk(chunk, meta),
+          output: (chunk: any, meta: any) => {
+            const data = new Uint8Array(chunk.byteLength);
+            chunk.copyTo(data);
+
+            if (meta && meta.decoderConfig) {
+              cachedDecoderConfig = meta.decoderConfig;
+            }
+
+            if (!cachedDecoderConfig) {
+              cachedDecoderConfig = {
+                codec: "avc1.42001f",
+                width: canvas.width,
+                height: canvas.height,
+                description: new Uint8Array([1, 66, 0, 31, 255, 224, 0]),
+                colorSpace: {
+                  primaries: "bt709",
+                  transfer: "bt709",
+                  matrix: "bt709",
+                  fullRange: false
+                }
+              };
+            }
+
+            const frameDurationUs = Math.round(1000000 / 20);
+            const duration = (chunk.duration !== null && chunk.duration !== undefined && chunk.duration > 0)
+              ? chunk.duration 
+              : frameDurationUs;
+
+            muxer.addVideoChunkRaw(
+              data,
+              chunk.type,
+              chunk.timestamp,
+              duration,
+              { decoderConfig: cachedDecoderConfig }
+            );
+          },
           error: (e: any) => {
             console.error("VideoEncoder error:", e);
             generateSlideshowVideoFallback(photos).then(resolve).catch(reject);
@@ -655,7 +712,7 @@ const generateSlideshowVideoFallback = (photos: string[]): Promise<VideoResult> 
 
         mediaRecorder.onstop = () => {
           const mime = mediaRecorder.mimeType || "video/webm";
-          const isMp4 = mime.includes("mp4");
+          const isMp4 = mime.includes("mp4") || mime.includes("quicktime");
           const blob = new Blob(chunks, { type: mime });
           resolve({
             url: URL.createObjectURL(blob),

@@ -194,12 +194,15 @@ export default function ConfigSelectorCard({
             {stickerList.length > 0 ? (
               <div className="grid grid-cols-3 landscape:grid-cols-3 portrait:sm:grid-cols-4 gap-2">
                 {stickerList.map((sticker) => (
-                  <div
+                  <button
                     key={sticker.id}
-                    className="group flex flex-col rounded-xl overflow-hidden bg-white dark:bg-zinc-950 ring-1 ring-inset ring-zinc-200/80 dark:ring-zinc-800/80 hover:ring-blue-400/70 dark:hover:ring-blue-500/50 transition-all"
+                    type="button"
+                    onClick={() => onAddSticker && onAddSticker(sticker)}
+                    title={`Tambah ${sticker.name}`}
+                    className="group relative flex flex-col rounded-xl overflow-hidden bg-white dark:bg-zinc-950 ring-1 ring-inset ring-zinc-200/80 dark:ring-zinc-800/80 hover:ring-blue-500/70 dark:hover:ring-blue-500/60 hover:shadow-md transition-all cursor-pointer aspect-square"
                   >
                     {/* Sticker preview area */}
-                    <div className="relative flex-1 flex items-center justify-center p-2 bg-zinc-50/80 dark:bg-zinc-900/40 aspect-square">
+                    <div className="w-full h-full flex items-center justify-center p-2 bg-zinc-50/80 dark:bg-zinc-900/40">
                       {sticker.imageUrl.startsWith("data:") || sticker.imageUrl.startsWith("http") || sticker.imageUrl.startsWith("/") ? (
                         <img
                           src={sticker.imageUrl}
@@ -214,21 +217,11 @@ export default function ConfigSelectorCard({
                       )}
                     </div>
 
-                    {/* Bottom: name + add button */}
-                    <div className="flex items-center justify-between px-2 py-1.5 border-t border-zinc-100 dark:border-zinc-800/60 shrink-0">
-                      <span className="text-[9px] font-semibold text-zinc-500 dark:text-zinc-400 truncate leading-none">
-                        {sticker.name}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => onAddSticker && onAddSticker(sticker)}
-                        title={`Tambah ${sticker.name}`}
-                        className="shrink-0 ml-1 flex items-center justify-center w-5 h-5 rounded-md bg-blue-500 hover:bg-blue-600 active:scale-90 text-white transition-all shadow-sm shadow-blue-500/30"
-                      >
-                        <Plus className="w-3 h-3" />
-                      </button>
+                    {/* Plus Button Overlay */}
+                    <div className="absolute bottom-1 right-1 w-5 h-5 rounded-full bg-blue-500 hover:bg-blue-600 active:scale-90 text-white flex items-center justify-center transition-all shadow-md shadow-blue-500/20 border border-white dark:border-zinc-950 z-10">
+                      <Plus className="w-3 h-3" />
                     </div>
-                  </div>
+                  </button>
                 ))}
               </div>
             ) : (

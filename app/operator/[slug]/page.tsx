@@ -90,7 +90,7 @@ export default function CustomerBoothSession() {
     const yPct = 20 + Math.random() * 60;
     setPlacedStickers((prev) => [
       ...prev,
-      { id, stickerId: sticker.id, xPct, yPct, scalePct: 100, rotation: Math.round((Math.random() - 0.5) * 30) },
+      { id, stickerId: sticker.id, xPct, yPct, scalePct: 20, rotation: Math.round((Math.random() - 0.5) * 30) },
     ]);
     toast(`Stiker "${sticker.name}" ditambahkan`, { duration: 1200, icon: "✨" });
   };
@@ -260,6 +260,22 @@ const handleUpdateSticker = (id: string, updates: Partial<PlacedSticker>) => {
       }
     }
   }, [config]);
+
+  // Synchronize activeLayout when activeFrameId or config changes
+  useEffect(() => {
+    if (config && activeFrameId) {
+      const preset = config.presetTemplates?.find((p) => p.id === activeFrameId);
+      if (preset) {
+        if (preset.id.includes("grid")) {
+          setActiveLayout("grid");
+        } else if (preset.id.includes("polaroid") || preset.customSlots) {
+          setActiveLayout("polaroid");
+        } else {
+          setActiveLayout("strip");
+        }
+      }
+    }
+  }, [config, activeFrameId]);
 
   // Sync step state with URL parameter on mount & handle browser back/forward buttons
   useEffect(() => {
@@ -931,9 +947,102 @@ const handleUpdateSticker = (id: string, updates: Partial<PlacedSticker>) => {
       )}
 
       {isRendering && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-[9999] flex flex-col items-center justify-center gap-4 text-white">
-          <div className="w-12 h-12 rounded-full border-4 border-emerald-500/30 border-t-emerald-500 animate-spin" />
-          <div className="flex flex-col items-center gap-1 text-center">
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-[9999] flex flex-col items-center justify-center gap-6 text-white select-none">
+          {/* Custom Animation CSS keyframes inline to isolate logic */}
+          <style>{`
+            @keyframes cameraShutter {
+              0%, 100% { transform: scale(1); }
+              20% { transform: scale(0.9); }
+              30% { transform: scale(1.05); }
+            }
+            @keyframes cameraFlash {
+              0%, 15% { opacity: 0; transform: scale(0.5); }
+              20% { opacity: 0.8; transform: scale(2.5); }
+              40% { opacity: 0; transform: scale(3); }
+              100% { opacity: 0; }
+            }
+            @keyframes photoPrint {
+              0%, 25% {
+                transform: translateY(-20px) scale(0.5);
+                opacity: 0;
+              }
+              40% {
+                transform: translateY(10px) scale(0.9);
+                opacity: 1;
+              }
+              85% {
+                transform: translateY(35px) scale(1);
+                opacity: 1;
+              }
+              100% {
+                transform: translateY(50px) scale(0.95);
+                opacity: 0;
+              }
+            }
+            @keyframes lensSpin {
+              0% { transform: rotate(0deg); }
+              100% { transform: rotate(360deg); }
+            }
+            .animate-camera {
+              animation: cameraShutter 3s ease-in-out infinite;
+            }
+            .animate-flash {
+              animation: cameraFlash 3s ease-in-out infinite;
+            }
+            .animate-print {
+              animation: photoPrint 3s cubic-bezier(0.18, 0.89, 0.32, 1.28) infinite;
+            }
+            .animate-lens {
+              animation: lensSpin 6s linear infinite;
+            }
+          `}</style>
+
+          {/* Animation Container */}
+          <div className="relative flex flex-col items-center justify-center">
+            {/* Shutter Flash Effect */}
+            <div className="absolute w-24 h-24 rounded-full bg-blue-400/25 blur-xl animate-flash pointer-events-none z-0" />
+
+            {/* Camera & Photo Printing Sandbox */}
+            <div className="relative w-28 h-32 flex flex-col items-center justify-start z-10 select-none">
+              
+              {/* Sleek Camera Body */}
+              <div className="relative w-20 h-14 bg-zinc-800 dark:bg-zinc-900 border-2 border-zinc-700 dark:border-zinc-800 rounded-2xl flex items-center justify-center shadow-xl animate-camera z-20">
+                {/* Red Camera Led Indicator */}
+                <div className="absolute top-2 right-3 w-1.5 h-1.5 rounded-full bg-rose-500 animate-ping" />
+                {/* Shutter Button */}
+                <div className="absolute -top-1 left-4 w-4 h-1.5 bg-zinc-700 dark:bg-zinc-850 rounded-t-sm" />
+                {/* Viewfinder */}
+                <div className="absolute top-2 left-3 w-3 h-2 bg-zinc-750 dark:bg-zinc-950 rounded border border-zinc-700/50" />
+                
+                {/* Camera Lens */}
+                <div className="w-9 h-9 rounded-full bg-zinc-900 dark:bg-zinc-950 border-2 border-zinc-700 dark:border-zinc-800 flex items-center justify-center relative overflow-hidden shadow-inner">
+                  <div className="w-6 h-6 rounded-full border border-dashed border-blue-500/40 animate-lens" />
+                  <div className="absolute w-2 h-2 rounded-full bg-white/20 top-1.5 left-1.5 blur-[0.5px]" />
+                </div>
+              </div>
+              
+              {/* Photo Strip Frame Emerging from Shutter */}
+              <div className="absolute top-10 w-12 h-16 bg-white dark:bg-zinc-100 border border-zinc-300 dark:border-zinc-200 rounded p-1 shadow-md animate-print z-10 flex flex-col gap-0.5 justify-between">
+                {/* Grid containing mini slots mimicking photostrip slots */}
+                <div className="w-full h-[22%] bg-zinc-200 dark:bg-zinc-300 rounded-sm overflow-hidden flex items-center justify-center">
+                  <Sparkles className="w-1.5 h-1.5 text-zinc-400" />
+                </div>
+                <div className="w-full h-[22%] bg-zinc-200 dark:bg-zinc-300 rounded-sm overflow-hidden flex items-center justify-center">
+                  <Heart className="w-1.5 h-1.5 text-zinc-400 animate-pulse" />
+                </div>
+                <div className="w-full h-[22%] bg-zinc-200 dark:bg-zinc-300 rounded-sm overflow-hidden flex items-center justify-center">
+                  <Star className="w-1.5 h-1.5 text-zinc-400" />
+                </div>
+                {/* Polaroid bottom border spacing */}
+                <div className="w-full h-[15%] flex justify-center items-center">
+                  <div className="w-6 h-0.5 bg-zinc-300 rounded-full" />
+                </div>
+              </div>
+
+            </div>
+          </div>
+
+          <div className="flex flex-col items-center gap-1 text-center mt-2">
             <span className="text-sm font-bold tracking-wide">Sedang Memproses &amp; Menyimpan Foto...</span>
             <span className="text-xs text-zinc-400 dark:text-zinc-550 font-mono">Mohon tunggu sebentar</span>
           </div>

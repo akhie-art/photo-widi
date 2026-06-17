@@ -737,11 +737,47 @@ const generateSlideshowVideo = async (photos: string[]): Promise<VideoResult> =>
             width: canvas.width,
             height: canvas.height,
           },
-          fastStart: "fragmented"
+          fastStart: "in-memory"
         });
 
+        let cachedDecoderConfig: any = null;
         const encoder = new VideoEncoderClass({
-          output: (chunk: any, meta: any) => muxer.addVideoChunk(chunk, meta),
+          output: (chunk: any, meta: any) => {
+            const data = new Uint8Array(chunk.byteLength);
+            chunk.copyTo(data);
+
+            if (meta && meta.decoderConfig) {
+              cachedDecoderConfig = meta.decoderConfig;
+            }
+
+            if (!cachedDecoderConfig) {
+              cachedDecoderConfig = {
+                codec: "avc1.42001f",
+                width: canvas.width,
+                height: canvas.height,
+                description: new Uint8Array([1, 66, 0, 31, 255, 224, 0]),
+                colorSpace: {
+                  primaries: "bt709",
+                  transfer: "bt709",
+                  matrix: "bt709",
+                  fullRange: false
+                }
+              };
+            }
+
+            const frameDurationUs = Math.round(1000000 / 20);
+            const duration = (chunk.duration !== null && chunk.duration !== undefined && chunk.duration > 0)
+              ? chunk.duration 
+              : frameDurationUs;
+
+            muxer.addVideoChunkRaw(
+              data,
+              chunk.type,
+              chunk.timestamp,
+              duration,
+              { decoderConfig: cachedDecoderConfig }
+            );
+          },
           error: (e: any) => {
             console.error("VideoEncoder error:", e);
             generateSlideshowVideoFallback(photos).then(resolve).catch(reject);
@@ -883,7 +919,7 @@ const generateSlideshowVideoFallback = (photos: string[]): Promise<VideoResult> 
 
         mediaRecorder.onstop = () => {
           const mime = mediaRecorder.mimeType || "video/webm";
-          const isMp4 = mime.includes("mp4");
+          const isMp4 = mime.includes("mp4") || mime.includes("quicktime");
           const blob = new Blob(chunks, { type: mime });
           resolve({
             url: URL.createObjectURL(blob),

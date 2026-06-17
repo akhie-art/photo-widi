@@ -123,16 +123,15 @@ const InteractiveSticker = ({
     window.addEventListener("pointerup", onUp);
   };
 
-  // Komponen Helper untuk merender tuas di sudut agar kode JSX lebih bersih
   const TransformHandle = ({ position, cursor }: { position: string, cursor: string }) => {
     if (isCapturing || !onUpdate) return null;
     return (
       <div
         onPointerDown={handleTransformStart}
-        className={`absolute w-3.5 h-3.5 rounded-full bg-blue-500 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-md z-40 border-2 border-white dark:border-[#121214] ${position} ${cursor}`}
+        className={`absolute w-5 h-5 rounded-full bg-blue-500 hover:bg-blue-600 text-white flex items-center justify-center transition-all shadow-md z-40 border border-white dark:border-[#121214] ${position} ${cursor}`}
         title="Tarik untuk mengubah ukuran dan memutar"
       >
-        <Maximize2 className="w-2 h-2" />
+        <Maximize2 className="w-2.5 h-2.5" />
       </div>
     );
   };
@@ -143,47 +142,50 @@ const InteractiveSticker = ({
       style={{
         left: `${sticker.xPct}%`,
         top: `${sticker.yPct}%`,
-        transform: `translate(-50%, -50%) rotate(${sticker.rotation}deg) scale(${sticker.scalePct / 100})`,
+        width: `${sticker.scalePct}%`,
+        height: "auto",
+        transform: `translate(-50%, -50%) rotate(${sticker.rotation}deg)`,
         transformOrigin: "center center",
       }}
       onPointerDown={handleDragStart}
     >
-      <div className={`relative ${!isCapturing ? "group-hover:ring-1 ring-blue-500/50 rounded-sm" : ""}`}>
+      <div className={`relative w-full h-full p-1.5 ${!isCapturing ? "border border-dashed border-blue-500/50 dark:border-blue-500/40 hover:border-blue-500 rounded-lg transition-all" : "border border-transparent"}`}>
         {isEmoji ? (
-          <span className="text-[5cqw] leading-none select-none drop-shadow-md pointer-events-none">
+          <span 
+            style={{
+              fontSize: `${sticker.scalePct * 0.85}cqw`,
+            }}
+            className="leading-none select-none drop-shadow-md pointer-events-none block text-center w-full h-full flex items-center justify-center"
+          >
             {asset.imageUrl}
           </span>
         ) : (
           <img
             src={asset.imageUrl}
             alt={asset.name}
-            className="w-[14cqw] h-[14cqw] object-contain drop-shadow-md pointer-events-none"
+            className="w-full h-auto drop-shadow-md pointer-events-none block"
             draggable={false}
           />
         )}
 
-        {/* Tombol Hapus: Dipindahkan ke atas-tengah agar tidak bentrok dengan tuas sudut */}
+        {/* Tombol Hapus: Top-Middle */}
         {!isCapturing && onRemove && (
           <button
             type="button"
             onPointerDown={(e) => e.stopPropagation()} 
             onClick={() => onRemove(sticker.id)}
-            className="absolute -top-3 left-1/2 -translate-x-1/2 w-4 h-4 rounded-full bg-red-500 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-sm z-50 cursor-pointer"
+            className="absolute -top-2.5 left-1/2 -translate-x-1/2 w-5 h-5 rounded-full bg-rose-500 hover:bg-rose-600 text-white flex items-center justify-center transition-all shadow-md z-50 cursor-pointer border border-white dark:border-[#121214]"
             title="Hapus stiker"
           >
-            <X className="w-2.5 h-2.5" />
+            <X className="w-3 h-3" strokeWidth={2.5} />
           </button>
         )}
 
-        {/* 👇 EMPAT TUAS TRANSFORMASI DI SETIAP SUDUT 👇 */}
-        {/* Top-Left */}
-        <TransformHandle position="-top-1.5 -left-1.5" cursor="cursor-nwse-resize" />
-        {/* Top-Right */}
-        <TransformHandle position="-top-1.5 -right-1.5" cursor="cursor-nesw-resize" />
-        {/* Bottom-Right (Original) */}
-        <TransformHandle position="-bottom-1.5 -right-1.5" cursor="cursor-nwse-resize" />
-        {/* Bottom-Left */}
-        <TransformHandle position="-bottom-1.5 -left-1.5" cursor="cursor-nesw-resize" />
+        {/* Tuas Transformasi: 4 Sudut */}
+        <TransformHandle position="-top-2 -left-2" cursor="cursor-nwse-resize" />
+        <TransformHandle position="-top-2 -right-2" cursor="cursor-nesw-resize" />
+        <TransformHandle position="-bottom-2 -left-2" cursor="cursor-nesw-resize" />
+        <TransformHandle position="-bottom-2 -right-2" cursor="cursor-nwse-resize" />
 
       </div>
     </div>

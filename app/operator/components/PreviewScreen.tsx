@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useRef } from "react";
-import { Download, RotateCcw, Smile, X, Printer, ArrowLeft } from "lucide-react";
+import { Download, RotateCcw, Smile, X, Printer, ArrowLeft, Maximize2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { EventConfig, PlacedSticker } from "../../hooks/usePhotoboothStore";
@@ -163,7 +163,7 @@ export default function PreviewScreen({
       // Scale
       const dist = Math.hypot(dx, dy);
       const scaleFactor = dist / inter.startDist;
-      const newScalePct = Math.max(5, Math.min(60, inter.startScalePct * scaleFactor));
+      const newScalePct = Math.max(5, inter.startScalePct * scaleFactor);
 
       updateSticker(inter.stickerId, {
         rotation: newRotation,
@@ -231,6 +231,7 @@ export default function PreviewScreen({
               <div
                 ref={containerRef}
                 onClick={() => setActiveStickerId(null)}
+                style={{ containerType: "inline-size" }}
                 className="relative rounded-xl border border-zinc-200/80 dark:border-zinc-800/85 shadow-2xl overflow-hidden select-none w-fit h-fit mx-auto flex items-center justify-center bg-zinc-100"
               >
                 {/* Gambar dipanggil langsung menggunakan tag img agar proporsinya natural */}
@@ -246,6 +247,18 @@ export default function PreviewScreen({
                   if (!asset) return null;
                   const isImg = asset.imageUrl.startsWith("data:") || asset.imageUrl.includes("/") || asset.imageUrl.startsWith("http");
                   const isFocused = activeStickerId === placed.id;
+
+                  const TransformHandle = ({ position, cursor }: { position: string, cursor: string }) => (
+                    <div
+                      onPointerDown={e => handlePointerDown(e, placed.id, "resize")}
+                      onPointerMove={handlePointerMove}
+                      onPointerUp={handlePointerUp}
+                      className={`absolute w-5 h-5 rounded-full bg-blue-500 hover:bg-blue-600 text-white flex items-center justify-center shadow-md z-40 border border-white dark:border-[#121214] ${position} ${cursor}`}
+                      title="Tarik untuk mengubah ukuran dan memutar"
+                    >
+                      <Maximize2 className="w-2.5 h-2.5" />
+                    </div>
+                  );
 
                   return (
                     <div
@@ -269,7 +282,12 @@ export default function PreviewScreen({
                       {isImg ? (
                         <img src={asset.imageUrl} alt={asset.name} className="w-full h-auto pointer-events-none select-none" />
                       ) : (
-                        <span className="text-3xl select-none block text-center leading-none pointer-events-none">{asset.imageUrl}</span>
+                        <span 
+                          style={{ fontSize: `${placed.scalePct * 0.85}cqw` }}
+                          className="select-none block text-center leading-none pointer-events-none w-full flex items-center justify-center"
+                        >
+                          {asset.imageUrl}
+                        </span>
                       )}
 
                       {/* Resize/Delete Controls */}
@@ -279,20 +297,17 @@ export default function PreviewScreen({
                             type="button"
                             onPointerDown={e => e.stopPropagation()}
                             onClick={() => deleteSticker(placed.id)}
-                            className="absolute -top-3 -left-3 w-5 h-5 rounded-full bg-red-500 text-white flex items-center justify-center shadow-md cursor-pointer hover:bg-red-600 border border-white z-10"
+                            className="absolute -top-3 left-1/2 -translate-x-1/2 w-5 h-5 rounded-full bg-rose-500 hover:bg-rose-600 text-white flex items-center justify-center shadow-md cursor-pointer border border-white z-50"
                             title="Hapus Stiker"
                           >
                             <X className="w-3 h-3" />
                           </button>
-                          <div
-                            onPointerDown={e => handlePointerDown(e, placed.id, "resize")}
-                            onPointerMove={handlePointerMove}
-                            onPointerUp={handlePointerUp}
-                            className="absolute -bottom-3 -right-3 w-5 h-5 rounded-full bg-blue-500 text-white flex items-center justify-center shadow-md cursor-se-resize hover:bg-blue-600 border border-white z-10"
-                            title="Putar & Skala"
-                          >
-                            <span className="text-[9px] font-bold">↺</span>
-                          </div>
+                          
+                          {/* 4 corner handles */}
+                          <TransformHandle position="-top-3 -left-3" cursor="cursor-nwse-resize" />
+                          <TransformHandle position="-top-3 -right-3" cursor="cursor-nesw-resize" />
+                          <TransformHandle position="-bottom-3 -left-3" cursor="cursor-nesw-resize" />
+                          <TransformHandle position="-bottom-3 -right-3" cursor="cursor-nwse-resize" />
                         </>
                       )}
                     </div>
