@@ -445,15 +445,7 @@ export default function PresetsTab({ config, addPresetTemplate, updatePresetTemp
                 <DialogTitle className="text-lg font-semibold">{presetEditingId ? "Edit Template Instan" : "Buat Template Instan"}</DialogTitle>
                 <DialogDescription className="sr-only">Atur ukuran kertas, overlay PNG, dan posisi letak jepretan kamera.</DialogDescription>
               </div>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setSidebarOpen(!sidebarOpen)}
-                className="h-9 px-3 text-xs gap-1.5 border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-900 cursor-pointer rounded-lg shadow-sm"
-              >
-                <Sidebar className="w-4 h-4" />
-                <span>{sidebarOpen ? "Sembunyikan Panel" : "Tampilkan Panel"}</span>
-              </Button>
+
             </div>
             <Button
               type="button"
@@ -484,6 +476,7 @@ export default function PresetsTab({ config, addPresetTemplate, updatePresetTemp
               }}
               paperSize={presetFormPaperSize}
               sidebarOpen={sidebarOpen}
+              onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
               sidebarContent={
                 <form id="preset-form" onSubmit={handlePresetSubmit} className="space-y-6">
                   

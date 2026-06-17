@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useRef, useCallback, useEffect, useMemo } from "react";
-import { Plus, Minus, RotateCcw, Trash2, Move, GripVertical, Image as ImageIcon, Square, ZoomIn, ZoomOut, ChevronUp, ChevronDown, Undo2, Redo2, Layers } from "lucide-react";
+import { Plus, Minus, RotateCcw, Trash2, Move, GripVertical, Image as ImageIcon, Square, ZoomIn, ZoomOut, ChevronUp, ChevronDown, Undo2, Redo2, Sidebar } from "lucide-react";
 import { SlotConfig } from "../../hooks/usePhotoboothStore";
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
@@ -87,6 +87,7 @@ interface Props {
   paperSize?: "2R" | "4R";
   sidebarContent?: React.ReactNode;
   sidebarOpen?: boolean;
+  onToggleSidebar?: () => void;
 }
 
 // ─── component ───────────────────────────────────────────────────────────────
@@ -107,6 +108,7 @@ export default function SlotLayoutEditor({
   paperSize = "2R",
   sidebarContent,
   sidebarOpen = true,
+  onToggleSidebar,
 }: Props) {
   const is2R = paperSize === "2R";
   const STRIP_W_CM = is2R ? 5.08 : 10.16;
@@ -123,7 +125,6 @@ export default function SlotLayoutEditor({
   const [guides, setGuides] = useState<{ x?: number; y?: number }>({});
   
   const [zoom, setZoom] = useState(paperSize === "2R" ? 1.5 : 1);
-  const [layersOpen, setLayersOpen] = useState(true);
   const zoomRef = useRef(zoom);
   useEffect(() => {
     zoomRef.current = zoom;
@@ -863,11 +864,13 @@ export default function SlotLayoutEditor({
               </>
             )}
 
-            <button type="button" onClick={() => setLayersOpen(!layersOpen)}
-              className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-lg hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-all cursor-pointer shadow-sm ml-1" title={layersOpen ? "Sembunyikan Lapisan" : "Tampilkan Lapisan"}>
-              <Layers className="w-3.5 h-3.5" strokeWidth={2} />
-              <span>{layersOpen ? "Sembunyikan Lapisan" : "Daftar Lapisan"}</span>
-            </button>
+            {onToggleSidebar && (
+              <button type="button" onClick={onToggleSidebar}
+                className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-lg hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-all cursor-pointer shadow-sm ml-1" title={sidebarOpen ? "Sembunyikan Panel" : "Tampilkan Panel"}>
+                <Sidebar className="w-3.5 h-3.5" strokeWidth={2} />
+                <span>{sidebarOpen ? "Sembunyikan Panel" : "Tampilkan Panel"}</span>
+              </button>
+            )}
           </div>
         </div>
 
