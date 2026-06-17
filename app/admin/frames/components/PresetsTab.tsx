@@ -453,9 +453,9 @@ export default function PresetsTab({ config, addPresetTemplate, updatePresetTemp
             </Button>
           </div>
           
-          <div className="flex-1 overflow-hidden flex flex-col lg:flex-row">
+          <div className="flex-1 overflow-hidden flex flex-col md:flex-row">
             {/* Panel Form Kiri */}
-            <div className="w-full lg:w-[360px] p-6 overflow-y-auto border-b lg:border-b-0 lg:border-r border-zinc-200 dark:border-zinc-800 space-y-6 shrink-0 custom-scrollbar max-h-[30vh] lg:max-h-none">
+            <div className="w-full md:w-[250px] lg:w-[360px] p-4 lg:p-6 overflow-y-auto border-b md:border-b-0 md:border-r border-zinc-200 dark:border-zinc-800 space-y-6 shrink-0 custom-scrollbar md:max-h-none">
               <form id="preset-form" onSubmit={handlePresetSubmit} className="space-y-6">
                 
                 <div className="space-y-3">
@@ -570,7 +570,7 @@ export default function PresetsTab({ config, addPresetTemplate, updatePresetTemp
             </div>
             
             {/* Panel Kanvas Kanan */}
-            <div className="flex-1 bg-zinc-50/50 dark:bg-zinc-900/20 p-6 flex flex-col overflow-hidden">
+            <div className="flex-1 bg-zinc-50/50 dark:bg-zinc-900/20 p-4 lg:p-6 flex flex-col overflow-hidden">
               <div className="flex-1 min-h-0 overflow-hidden">
                 <SlotLayoutEditor
                   slots={presetFormSlots} onChange={setPresetFormSlots} overlay={presetFormOverlay}
