@@ -7,6 +7,7 @@ import { usePhotoboothStore } from "@/app/hooks/usePhotoboothStore";
 export default function TitleHandler() {
   const { config } = usePhotoboothStore();
   const pathname = usePathname();
+  const logoUrl = config.logoUrl || "/favicon.ico";
   const eventName = config.eventName?.trim() || "GLOW Virtual Photobooth";
 
   useEffect(() => {
@@ -37,7 +38,22 @@ export default function TitleHandler() {
     }
 
     document.title = `${eventName} | ${pageName}`;
-  }, [eventName, pathname]);
+
+    // Update favicon dynamically
+    const rels = ["icon", "shortcut icon", "apple-touch-icon"];
+    rels.forEach(rel => {
+      let link = document.querySelector(`link[rel="${rel}"]`) as HTMLLinkElement;
+      if (!link) {
+        link = document.querySelector(`link[rel~="${rel}"]`) as HTMLLinkElement;
+      }
+      if (!link) {
+        link = document.createElement('link');
+        link.rel = rel;
+        document.head.appendChild(link);
+      }
+      link.href = logoUrl;
+    });
+  }, [eventName, pathname, logoUrl]);
 
   return null;
 }

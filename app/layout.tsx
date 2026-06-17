@@ -27,10 +27,16 @@ export async function generateMetadata(): Promise<Metadata> {
 
     const config = cfgRow?.config_json as any;
     const eventName = config?.eventName?.trim();
+    const logoUrl = config?.logoUrl;
+    
     return {
       title: eventName || "GLOW Virtual Photobooth",
       description: "Your modern premium virtual photobooth experience",
-      manifest: "/manifest.json",
+      icons: {
+        icon: logoUrl || "/favicon.ico",
+        shortcut: logoUrl || "/favicon.ico",
+        apple: logoUrl || "/favicon.ico",
+      },
       appleWebApp: {
         capable: true,
         statusBarStyle: "default",
@@ -41,7 +47,11 @@ export async function generateMetadata(): Promise<Metadata> {
     return {
       title: "GLOW Virtual Photobooth",
       description: "Your modern premium virtual photobooth experience",
-      manifest: "/manifest.json",
+      icons: {
+        icon: "/favicon.ico",
+        shortcut: "/favicon.ico",
+        apple: "/favicon.ico",
+      },
       appleWebApp: {
         capable: true,
         statusBarStyle: "default",
