@@ -106,6 +106,16 @@ export default function CaptureScreen({
 
   const filledPhotosCount = Array.from({ length: layoutsCount }).filter((_, idx) => !!capturedPhotos[idx]).length;
 
+  const is4R = activeTemplate?.paperSize === "4R";
+
+  const cameraColClass = is4R
+    ? "w-full col-span-12 portrait:col-span-8 portrait:row-start-1 portrait:col-start-1 landscape:col-span-5 landscape:row-start-1 landscape:col-start-4 h-full flex flex-col min-h-0"
+    : "w-full col-span-12 portrait:col-span-9 portrait:row-start-1 portrait:col-start-1 landscape:col-span-6 landscape:row-start-1 landscape:col-start-4 h-full flex flex-col min-h-0";
+
+  const progressColClass = is4R
+    ? "w-full col-span-12 portrait:col-span-4 portrait:row-start-1 portrait:col-start-9 landscape:col-span-4 landscape:row-start-1 landscape:col-start-9 h-full flex flex-col min-h-0"
+    : "w-full col-span-12 portrait:col-span-3 portrait:row-start-1 portrait:col-start-10 landscape:col-span-3 landscape:row-start-1 landscape:col-start-10 h-full flex flex-col min-h-0";
+
   return (
     <div className="w-full h-screen grid grid-cols-12 gap-4 md:gap-6 p-4 md:p-6 items-stretch justify-center animate-fade-in duration-300 overflow-hidden">
       
@@ -126,7 +136,7 @@ export default function CaptureScreen({
       </div>
 
       {/* COLUMN 2: CAMERA STANDBY CARD */}
-      <div className="w-full col-span-12 portrait:col-span-9 portrait:row-start-1 portrait:col-start-1 landscape:col-span-6 landscape:row-start-1 landscape:col-start-4 h-full flex flex-col min-h-0">
+      <div className={cameraColClass}>
         <CameraStandbyCard
           videoRef={videoRef}
           isCapturing={isCapturing}
@@ -148,7 +158,7 @@ export default function CaptureScreen({
       </div>
 
       {/* COLUMN 3: PHOTO STRIP PROGRESS/RESULTS */}
-      <div className="w-full col-span-12 portrait:col-span-3 portrait:row-start-1 portrait:col-start-10 landscape:col-span-3 landscape:row-start-1 landscape:col-start-10 h-full flex flex-col min-h-0">
+      <div className={progressColClass}>
         <PhotoStripProgressCard
           containerRef={containerRef}
           capturedPhotos={capturedPhotos}

@@ -139,3 +139,24 @@
   background-image: conic-gradient(#27272a 25%, #121214 0 50%, #27272a 0 75%, #121214 0);
   background-size: 20px 20px;
 }
+
+@keyframes swooshLeft {
+  0% {
+    transform: translateX(150px) scale(0.9);
+    opacity: 0;
+    filter: blur(4px);
+  }
+  60% {
+    transform: translateX(-15px) scale(1.02);
+    opacity: 0.9;
+  }
+  100% {
+    transform: translateX(0) scale(1);
+    opacity: 1;
+    filter: blur(0);
+  }
+}
+
+.animate-swoosh-left {
+  animation: swooshLeft 0.5s cubic-bezier(0.25, 1, 0.5, 1) forwards;
+}

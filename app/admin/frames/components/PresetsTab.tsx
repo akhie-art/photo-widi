@@ -356,7 +356,7 @@ export default function PresetsTab({ config, addPresetTemplate, updatePresetTemp
                     </div>
                     
                     {/* Floating Action Buttons */}
-                    <div className="absolute top-2 right-2 flex gap-1.5 opacity-0 group-hover:opacity-100 transition-all transform translate-y-1 group-hover:translate-y-0 z-20">
+                    <div className="absolute top-2 right-2 flex gap-1.5 z-20">
                       <button 
                         onClick={e => { e.stopPropagation(); openEditPreset(preset); }} 
                         className="p-1.5 bg-white/90 dark:bg-zinc-800/90 backdrop-blur rounded-md text-zinc-600 dark:text-zinc-300 hover:text-blue-600 dark:hover:text-blue-400 shadow-sm border border-zinc-200/50 dark:border-zinc-700/50"

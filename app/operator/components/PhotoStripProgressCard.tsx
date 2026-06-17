@@ -222,39 +222,19 @@ export default function PhotoStripProgressCard({
   const remaining = layoutsCount - filledPhotosCount;
 
   return (
-    <div className="w-full h-full bg-white dark:bg-[#121214] border border-zinc-200 dark:border-zinc-800 rounded-3xl p-3 sm:p-5 flex flex-col items-center justify-between gap-3 sm:gap-4 transition-all relative overflow-hidden">
-
-      <div className="w-full pb-3 border-b border-zinc-100 dark:border-zinc-800/50 select-none flex items-center justify-between shrink-0">
-        <div className="flex flex-col gap-1 text-left">
-          <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 tracking-tight">
-            Pratinjau Cetak
-          </h3>
-          <p className="text-[10px] text-zinc-400 dark:text-zinc-500 font-medium">
-            {remaining > 0 ? `${remaining} foto tersisa` : "Semua foto selesai!"}
-          </p>
-        </div>
-        <div className="flex items-center gap-1.5 shrink-0">
-          {Array.from({ length: layoutsCount }).map((_, i) => (
-            <div
-              key={i}
-              className={`h-1.5 rounded-full transition-all duration-300 ${
-                i < filledPhotosCount
-                  ? "w-4 bg-blue-500"
-                  : "w-1.5 bg-zinc-300 dark:bg-zinc-700"
-              }`}
-            />
-          ))}
-        </div>
-      </div>
+    <div className="w-full h-full flex flex-col items-center justify-center gap-3 transition-all relative overflow-hidden">
 
       <div className="w-full flex-1 flex justify-center items-center relative min-h-0">
         <div
           ref={containerRef}
-          className="relative overflow-hidden border border-zinc-200/60 dark:border-zinc-800/60 transition-all duration-300 mx-auto"
+          key={`${activeTemplate?.id || "default"}_${activeLayout}`}
+          className="relative overflow-hidden border border-zinc-200/60 dark:border-zinc-800/60 transition-all duration-300 mx-auto animate-swoosh-left"
           style={{
             aspectRatio: `${currentW} / ${currentH}`,
             width: "100%",
-            maxWidth: `min(260px, calc(65vh * (${currentW} / ${currentH})))`,
+            maxWidth: activeTemplate?.paperSize === "4R"
+              ? `min(440px, calc(75vh * (${currentW} / ${currentH})))`
+              : `min(360px, calc(65vh * (${currentW} / ${currentH})))`,
             containerType: "inline-size",
             borderRadius: isCustomFrame ? "0px" : "12px",
             ...getBackgroundStyle(),
@@ -374,8 +354,8 @@ export default function PhotoStripProgressCard({
         </div>
       </div>
 
-      <div className="w-full flex justify-center min-h-[52px] items-center">
-        {allDone ? (
+      {allDone && (
+        <div className="w-full flex justify-center min-h-[52px] items-center shrink-0">
           <button
             onClick={onComplete}
             className="group w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-500 active:scale-[0.98] text-white font-semibold text-sm py-3.5 rounded-2xl cursor-pointer transition-all duration-200 shadow-lg shadow-blue-500/25"
@@ -383,19 +363,8 @@ export default function PhotoStripProgressCard({
             <span>Lihat Hasil</span>
             <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform duration-200" />
           </button>
-        ) : (
-          <div className="flex items-center gap-2 text-zinc-400 dark:text-zinc-500">
-            <div className="flex gap-1">
-              {Array.from({ length: remaining }).map((_, i) => (
-                <div key={i} className="w-1 h-1 rounded-full bg-zinc-300 dark:bg-zinc-700 animate-pulse" style={{ animationDelay: `${i * 150}ms` }} />
-              ))}
-            </div>
-            <span className="text-[10px] font-mono">
-              {remaining} foto lagi
-            </span>
-          </div>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -154,7 +154,7 @@ export default function StickersTab({ config, addStickerAsset, deleteStickerAsse
                       setStickerToDelete({ id: sticker.id, name: sticker.name });
                       setDeleteDialogOpen(true);
                     }} 
-                    className="absolute top-2 right-2 p-1.5 text-zinc-400 hover:text-red-500 hover:bg-red-500/10 dark:hover:bg-red-500/20 md:opacity-0 group-hover:opacity-100 transition-all bg-zinc-50 dark:bg-zinc-900 border border-zinc-200/60 dark:border-zinc-800 rounded-lg cursor-pointer"
+                    className="absolute top-2 right-2 p-1.5 text-zinc-400 hover:text-red-500 hover:bg-red-500/10 dark:hover:bg-red-500/20 transition-all bg-zinc-50 dark:bg-zinc-900 border border-zinc-200/60 dark:border-zinc-800 rounded-lg cursor-pointer"
                     title="Hapus Stiker"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
