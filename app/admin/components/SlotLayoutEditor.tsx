@@ -700,7 +700,7 @@ export default function SlotLayoutEditor({
   };
 
   return (
-    <div className="flex flex-col md:flex-row gap-5 w-full h-full">
+    <div className="flex flex-col lg:flex-row gap-5 w-full h-full">
       {/* KIRI: Kanvas & Kontrol */}
       <div className="flex-1 flex flex-col gap-3 min-w-0">
         
@@ -746,7 +746,7 @@ export default function SlotLayoutEditor({
           </div>
         </div>
 
-        <div className="flex-1 bg-zinc-100/50 dark:bg-zinc-900/30 border border-zinc-200 dark:border-zinc-800 rounded-xl flex flex-col overflow-hidden relative min-h-[400px]">
+        <div className="flex-1 bg-zinc-100/50 dark:bg-zinc-900/30 border border-zinc-200 dark:border-zinc-800 rounded-xl flex flex-col overflow-hidden relative min-h-[320px] lg:min-h-[400px]">
           
           <div className="absolute top-3 right-3 z-50 flex items-center bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-lg shadow-sm overflow-hidden">
             <button type="button" onClick={() => setZoom(z => Math.max(0.2, z - 0.1))} className="p-1.5 text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100 dark:hover:text-white dark:hover:bg-zinc-800 transition-colors" title="Zoom Out">
@@ -926,7 +926,7 @@ export default function SlotLayoutEditor({
     </div>
 
       {/* KANAN: Daftar Lapisan Terintegrasi */}
-      <div className="w-full md:w-56 shrink-0 bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl p-3.5 flex flex-col shadow-sm max-h-[500px]">
+      <div className="w-full lg:w-56 shrink-0 bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl p-3.5 flex flex-col shadow-sm max-h-[200px] lg:max-h-[500px]">
         <div className="mb-2">
           <h4 className="text-sm font-semibold text-zinc-900 dark:text-white">Daftar Lapisan</h4>
         </div>

@@ -453,9 +453,9 @@ export default function PresetsTab({ config, addPresetTemplate, updatePresetTemp
             </Button>
           </div>
           
-          <div className="flex-1 overflow-hidden flex flex-col md:flex-row">
+          <div className="flex-1 overflow-hidden flex flex-col lg:flex-row">
             {/* Panel Form Kiri */}
-            <div className="w-full md:w-[320px] lg:w-[360px] p-6 overflow-y-auto border-r border-zinc-200 dark:border-zinc-800 space-y-6 shrink-0 custom-scrollbar">
+            <div className="w-full lg:w-[360px] p-6 overflow-y-auto border-b lg:border-b-0 lg:border-r border-zinc-200 dark:border-zinc-800 space-y-6 shrink-0 custom-scrollbar max-h-[30vh] lg:max-h-none">
               <form id="preset-form" onSubmit={handlePresetSubmit} className="space-y-6">
                 
                 <div className="space-y-3">
