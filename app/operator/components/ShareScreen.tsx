@@ -441,10 +441,10 @@ export default function ShareScreen({
       </div>
 
       {/* 2 Columns Layout */}
-      <div className="flex-1 w-full flex flex-col md:flex-row gap-4 md:gap-8 justify-center items-stretch overflow-y-auto pr-1">
+      <div className="flex-1 w-full flex flex-col lg:flex-row gap-4 lg:gap-8 justify-center items-stretch overflow-y-auto pr-1">
         
         {/* Column 1: Asset list checklist */}
-        <div className="w-full md:w-1/2 flex flex-col bg-zinc-50/50 dark:bg-zinc-950/20 p-5 rounded-2xl border border-zinc-100 dark:border-zinc-900">
+        <div className="w-full lg:w-1/2 flex flex-col bg-zinc-50/50 dark:bg-zinc-950/20 p-5 rounded-2xl border border-zinc-100 dark:border-zinc-900">
           <div className="flex justify-between items-center mb-4 pb-2 border-b border-zinc-200/50 dark:border-zinc-800/60 w-full">
             <span className="text-xs font-bold text-zinc-700 dark:text-zinc-300">Pilih Aset untuk Diunduh</span>
             
@@ -568,7 +568,7 @@ export default function ShareScreen({
         </div>
 
         {/* Column 2: Dynamic high-res preview panel & actions split */}
-        <div className="w-full md:w-1/2 flex flex-col gap-4">
+        <div className="w-full lg:w-1/2 flex flex-col gap-4">
           
           {/* Card 1: Pratinjau Aset */}
           <div className="flex-1 flex flex-col items-center gap-4 bg-zinc-50/50 dark:bg-zinc-950/20 p-5 rounded-2xl border border-zinc-100 dark:border-zinc-900 justify-center">

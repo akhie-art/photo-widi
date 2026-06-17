@@ -215,10 +215,10 @@ export default function PreviewScreen({
         </div>
       </div>
 
-      <div className="flex-1 w-full flex flex-col md:flex-row gap-6 md:gap-8 items-center justify-center overflow-y-auto pr-1 z-10 relative">
+      <div className="flex-1 w-full flex flex-col lg:flex-row gap-6 lg:gap-8 items-center justify-center overflow-y-auto pr-1 z-10 relative">
       
       {/* ── Left Column: Interactive Photo Strip Editor Sandbox ── */}
-      <div className="w-full md:w-1/2 flex flex-col items-center justify-center gap-4">
+      <div className="w-full lg:w-1/2 flex flex-col items-center justify-center gap-4">
         
         {isRendering ? (
           <div className="w-[260px] h-[450px] bg-zinc-50/50 dark:bg-zinc-950/45 backdrop-blur-md border border-zinc-200 dark:border-zinc-800 rounded-2xl flex flex-col items-center justify-center gap-4 shadow-2xl">
@@ -320,7 +320,7 @@ export default function PreviewScreen({
       </div>
 
       {/* ── Right Column: Customizer options, Stickers Drawer & Actions ── */}
-      <div className="w-full md:w-1/2 bg-white dark:bg-zinc-950 ring-1 ring-zinc-200/80 dark:ring-zinc-800/50 rounded-3xl p-6 flex flex-col gap-6 shadow-[0_8px_30px_rgb(0,0,0,0.02)] relative overflow-hidden text-left transition-colors">
+      <div className="w-full lg:w-1/2 bg-white dark:bg-zinc-950 ring-1 ring-zinc-200/80 dark:ring-zinc-800/50 rounded-3xl p-6 flex flex-col gap-6 shadow-[0_8px_30px_rgb(0,0,0,0.02)] relative overflow-hidden text-left transition-colors">
         <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-blue-500/0 via-blue-500/35 to-blue-500/0" />
         
         <div>
