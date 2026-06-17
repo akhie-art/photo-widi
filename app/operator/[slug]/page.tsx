@@ -420,6 +420,14 @@ const handleUpdateSticker = (id: string, updates: Partial<PlacedSticker>) => {
   const startCamera = async () => {
     stopCamera();
 
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      toast.error(
+        "Kamera tidak dapat diakses karena koneksi tidak aman (non-HTTPS). Gunakan koneksi HTTPS atau akses melalui localhost."
+      );
+      console.warn("webcam access blocked: navigator.mediaDevices is undefined (requires a Secure Context / HTTPS)");
+      return;
+    }
+
     const constraints = {
       video: {
         deviceId: selectedCameraId ? { ideal: selectedCameraId } : undefined,
