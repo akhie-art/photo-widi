@@ -85,6 +85,8 @@ interface Props {
   onChangeOverlayZIndex?: (z: number) => void;
   maxSlots?:  number;
   paperSize?: "2R" | "4R";
+  sidebarContent?: React.ReactNode;
+  sidebarOpen?: boolean;
 }
 
 // ─── component ───────────────────────────────────────────────────────────────
@@ -103,6 +105,8 @@ export default function SlotLayoutEditor({
   onChangeOverlayZIndex,
   maxSlots,
   paperSize = "2R",
+  sidebarContent,
+  sidebarOpen = true,
 }: Props) {
   const is2R = paperSize === "2R";
   const STRIP_W_CM = is2R ? 5.08 : 10.16;
@@ -701,9 +705,123 @@ export default function SlotLayoutEditor({
   };
 
   return (
-    <div className="flex flex-col md:flex-row gap-4 w-full h-full">
-      {/* KIRI: Kanvas & Kontrol */}
-      <div className="flex-1 flex flex-col gap-3 min-w-0">
+    <div className="flex flex-col md:flex-row gap-4 w-full h-full overflow-hidden">
+      {/* KIRI: Sidebar (Form Konten + Daftar Lapisan) */}
+      {sidebarContent && (
+        <div className={`shrink-0 bg-white dark:bg-zinc-950 border-b md:border-b-0 md:border-r border-zinc-200 dark:border-zinc-800 space-y-6 flex flex-col overflow-y-auto custom-scrollbar transition-all duration-300 ${
+          sidebarOpen 
+            ? "w-full md:w-[250px] lg:w-[320px] p-4 lg:p-6 opacity-100" 
+            : "w-0 p-0 opacity-0 border-none overflow-hidden pointer-events-none"
+        }`}>
+          {sidebarContent}
+          
+          {/* Daftar Lapisan Terintegrasi */}
+          <div className="w-full flex flex-col pt-5 border-t border-zinc-200 dark:border-zinc-800 shrink-0">
+            <div className="mb-2">
+              <h4 className="text-sm font-semibold text-zinc-900 dark:text-white">Daftar Lapisan</h4>
+            </div>
+            <div className="space-y-1.5 overflow-y-auto pr-1 max-h-[300px] custom-scrollbar">
+              {uiLayers.map((layer, index) => {
+                const isOverlay = layer.type === 'overlay';
+                const isSelected = isOverlay 
+                  ? editTarget === 'overlay' 
+                  : (editTarget === 'slots' && activeId === layer.id);
+
+                const isOver = dragOverId === layer.id;
+
+                return (
+                  <div
+                    key={layer.id}
+                    data-layer-id={layer.id}
+                    draggable
+                    onDragStart={(e) => handleDragStartLayer(e, layer.id)}
+                    onDragEnter={(e) => { e.preventDefault(); setDragOverId(layer.id); }}
+                    onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = "move"; }}
+                    onDragLeave={(e) => { e.preventDefault(); if (dragOverId === layer.id) setDragOverId(null); }}
+                    onDrop={(e) => handleDropLayer(e, layer.id)}
+                    onDragEnd={() => {
+                      setDraggedLayerId(null);
+                      setDragOverId(null);
+                    }}
+                    onTouchStart={() => {
+                      setDraggedLayerId(layer.id);
+                    }}
+                    onTouchMove={(e) => handleTouchMoveLayer(e, layer.id)}
+                    onTouchEnd={() => {
+                      setDraggedLayerId(null);
+                      setDragOverId(null);
+                      saveSnapshot();
+                    }}
+                    onTouchCancel={() => {
+                      setDraggedLayerId(null);
+                      setDragOverId(null);
+                    }}
+                    onClick={() => {
+                      if (isOverlay) {
+                        setEditTarget('overlay');
+                      } else {
+                        setEditTarget('slots');
+                        setActiveId(layer.id);
+                      }
+                    }}
+                    className={`flex items-center gap-1.5 lg:gap-2 p-1.5 lg:p-2 border rounded-lg cursor-grab active:cursor-grabbing transition-all select-none relative ${
+                      draggedLayerId === layer.id ? 'opacity-40 border-zinc-400 scale-[0.98]' :
+                      isSelected ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-500 ring-1 ring-blue-500/50' :
+                      'bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 hover:border-zinc-300 dark:hover:border-zinc-700'
+                    } ${isOver ? 'ring-2 ring-blue-500 ring-offset-1 z-10 border-transparent shadow-md' : ''}`}
+                    style={{
+                      touchAction: "none",
+                      WebkitTouchCallout: "none"
+                    }}
+                  >
+                    {/* Grip Handle */}
+                    <GripVertical className="pointer-events-none w-4 h-4 text-zinc-400 shrink-0" />
+                    
+                    {/* Icon Item */}
+                    <div className={`pointer-events-none flex items-center justify-center w-6 h-6 rounded ${isSelected ? 'bg-blue-100 dark:bg-blue-900/40' : 'bg-white dark:bg-zinc-800'} border border-zinc-200 dark:border-zinc-700 shrink-0`}>
+                      {isOverlay ? (
+                        <ImageIcon className="w-3.5 h-3.5 text-zinc-500" />
+                      ) : (
+                        <Square className="w-3.5 h-3.5 text-zinc-500" />
+                      )}
+                    </div>
+
+                    {/* Text Label */}
+                    <p className={`pointer-events-none text-xs font-medium truncate flex-1 ${isSelected ? 'text-blue-700 dark:text-blue-400' : 'text-zinc-700 dark:text-zinc-300'}`}>
+                      {isOverlay ? 'Gambar Overlay' : `Slot Kamera ${getSlotNumber(layer.id)}`}
+                    </p>
+
+                    {/* Arrow Controls */}
+                    <div className="flex flex-col gap-[2px] ml-auto shrink-0">
+                      <button 
+                        type="button" 
+                        onClick={(e) => { e.stopPropagation(); moveLayer(layer.id, 'up'); }}
+                        disabled={index === 0}
+                        title="Naikkan Lapisan"
+                        className="p-0.5 text-zinc-400 hover:text-zinc-900 hover:bg-zinc-200 dark:hover:text-white dark:hover:bg-zinc-700 rounded transition-colors disabled:opacity-30 disabled:pointer-events-none cursor-pointer"
+                      >
+                        <ChevronUp className="w-3.5 h-3.5" />
+                      </button>
+                      <button 
+                        type="button" 
+                        onClick={(e) => { e.stopPropagation(); moveLayer(layer.id, 'down'); }}
+                        disabled={index === uiLayers.length - 1}
+                        title="Turunkan Lapisan"
+                        className="p-0.5 text-zinc-400 hover:text-zinc-900 hover:bg-zinc-200 dark:hover:text-white dark:hover:bg-zinc-700 rounded transition-colors disabled:opacity-30 disabled:pointer-events-none cursor-pointer"
+                      >
+                        <ChevronDown className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* KANAN: Kanvas & Kontrol */}
+      <div className="flex-1 flex flex-col gap-3 min-w-0 p-4 lg:p-6 overflow-hidden">
         
         <div className="flex items-center justify-end gap-2 flex-wrap">
           <div className="flex items-center gap-1.5">
@@ -931,113 +1049,6 @@ export default function SlotLayoutEditor({
         </div>
       </div>
     </div>
-
-      {/* KANAN: Daftar Lapisan Terintegrasi */}
-      <div className={`shrink-0 bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl p-3 flex flex-col shadow-sm max-h-[500px] transition-all duration-300 ${
-        layersOpen 
-          ? "w-full md:w-[180px] lg:w-56 opacity-100" 
-          : "w-0 p-0 opacity-0 border-none overflow-hidden pointer-events-none"
-      }`}>
-        <div className="mb-2">
-          <h4 className="text-sm font-semibold text-zinc-900 dark:text-white">Daftar Lapisan</h4>
-        </div>
-        <div className="flex-1 overflow-y-auto space-y-1.5 pr-1 custom-scrollbar">
-          {uiLayers.map((layer, index) => {
-            const isOverlay = layer.type === 'overlay';
-            const isSelected = isOverlay 
-              ? editTarget === 'overlay' 
-              : (editTarget === 'slots' && activeId === layer.id);
-
-            const isOver = dragOverId === layer.id;
-
-            return (
-              <div
-                key={layer.id}
-                data-layer-id={layer.id}
-                draggable
-                onDragStart={(e) => handleDragStartLayer(e, layer.id)}
-                onDragEnter={(e) => { e.preventDefault(); setDragOverId(layer.id); }}
-                onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = "move"; }}
-                onDragLeave={(e) => { e.preventDefault(); if (dragOverId === layer.id) setDragOverId(null); }}
-                onDrop={(e) => handleDropLayer(e, layer.id)}
-                onDragEnd={() => {
-                  setDraggedLayerId(null);
-                  setDragOverId(null);
-                }}
-                onTouchStart={() => {
-                  setDraggedLayerId(layer.id);
-                }}
-                onTouchMove={(e) => handleTouchMoveLayer(e, layer.id)}
-                onTouchEnd={() => {
-                  setDraggedLayerId(null);
-                  setDragOverId(null);
-                  saveSnapshot();
-                }}
-                onTouchCancel={() => {
-                  setDraggedLayerId(null);
-                  setDragOverId(null);
-                }}
-                onClick={() => {
-                  if (isOverlay) {
-                    setEditTarget('overlay');
-                  } else {
-                    setEditTarget('slots');
-                    setActiveId(layer.id);
-                  }
-                }}
-                className={`flex items-center gap-1.5 lg:gap-2 p-1.5 lg:p-2 border rounded-lg cursor-grab active:cursor-grabbing transition-all select-none relative ${
-                  draggedLayerId === layer.id ? 'opacity-40 border-zinc-400 scale-[0.98]' :
-                  isSelected ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-500 ring-1 ring-blue-500/50' :
-                  'bg-zinc-50 dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 hover:border-zinc-300 dark:hover:border-zinc-700'
-                } ${isOver ? 'ring-2 ring-blue-500 ring-offset-1 z-10 border-transparent shadow-md' : ''}`}
-                style={{
-                  touchAction: "none",
-                  WebkitTouchCallout: "none"
-                }}
-              >
-                {/* Grip Handle */}
-                <GripVertical className="pointer-events-none w-4 h-4 text-zinc-400 shrink-0" />
-                
-                {/* Icon Item */}
-                <div className={`pointer-events-none flex items-center justify-center w-6 h-6 rounded ${isSelected ? 'bg-blue-100 dark:bg-blue-900/40' : 'bg-white dark:bg-zinc-800'} border border-zinc-200 dark:border-zinc-700 shrink-0`}>
-                  {isOverlay ? (
-                    <ImageIcon className="w-3.5 h-3.5 text-zinc-500" />
-                  ) : (
-                    <Square className="w-3.5 h-3.5 text-zinc-500" />
-                  )}
-                </div>
-
-                {/* Text Label */}
-                <p className={`pointer-events-none text-xs font-medium truncate flex-1 ${isSelected ? 'text-blue-700 dark:text-blue-400' : 'text-zinc-700 dark:text-zinc-300'}`}>
-                  {isOverlay ? 'Gambar Overlay' : `Slot Kamera ${getSlotNumber(layer.id)}`}
-                </p>
-
-                {/* Arrow Controls */}
-                <div className="flex flex-col gap-[2px] ml-auto shrink-0">
-                  <button 
-                    type="button" 
-                    onClick={(e) => { e.stopPropagation(); moveLayer(layer.id, 'up'); }}
-                    disabled={index === 0}
-                    title="Naikkan Lapisan"
-                    className="p-0.5 text-zinc-400 hover:text-zinc-900 hover:bg-zinc-200 dark:hover:text-white dark:hover:bg-zinc-700 rounded transition-colors disabled:opacity-30 disabled:pointer-events-none cursor-pointer"
-                  >
-                    <ChevronUp className="w-3.5 h-3.5" />
-                  </button>
-                  <button 
-                    type="button" 
-                    onClick={(e) => { e.stopPropagation(); moveLayer(layer.id, 'down'); }}
-                    disabled={index === uiLayers.length - 1}
-                    title="Turunkan Lapisan"
-                    className="p-0.5 text-zinc-400 hover:text-zinc-900 hover:bg-zinc-200 dark:hover:text-white dark:hover:bg-zinc-700 rounded transition-colors disabled:opacity-30 disabled:pointer-events-none cursor-pointer"
-                  >
-                    <ChevronDown className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-    </div>
+  </div>
   );
 }

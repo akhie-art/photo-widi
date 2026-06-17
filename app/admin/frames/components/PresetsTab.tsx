@@ -465,138 +465,139 @@ export default function PresetsTab({ config, addPresetTemplate, updatePresetTemp
             </Button>
           </div>
           
-          <div className="flex-1 overflow-hidden flex flex-col md:flex-row">
-            {/* Panel Form Kiri */}
-            <div className={`overflow-y-auto border-b md:border-b-0 md:border-r border-zinc-200 dark:border-zinc-800 space-y-6 shrink-0 custom-scrollbar md:max-h-none transition-all duration-300 ${
-              sidebarOpen 
-                ? "w-full md:w-[250px] lg:w-[320px] p-4 lg:p-6 opacity-100" 
-                : "w-0 p-0 opacity-0 border-none overflow-hidden pointer-events-none"
-            }`}>
-              <form id="preset-form" onSubmit={handlePresetSubmit} className="space-y-6">
-                
-                <div className="space-y-3">
-                  <Label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Ukuran Kertas</Label>
-                  <div className="grid grid-cols-2 gap-3">
-                    {/* 2R Card */}
-                    <div 
-                      onClick={() => setPresetFormPaperSize("2R")}
-                      className={`flex flex-col p-3 rounded-xl border cursor-pointer select-none transition-all duration-200 hover:-translate-y-0.5 hover:shadow-sm ${
-                        presetFormPaperSize === "2R" 
-                          ? "border-zinc-900 dark:border-zinc-100 bg-zinc-50 dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100" 
-                          : "border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 text-zinc-500 dark:text-zinc-400"
-                      }`}
-                    >
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="text-xs font-semibold">Ukuran 2R</span>
-                        <div className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center ${
-                          presetFormPaperSize === "2R" ? "border-zinc-900 dark:border-zinc-100 bg-zinc-900 dark:bg-zinc-100" : "border-zinc-300 dark:border-zinc-750 bg-transparent"
-                        }`}>
-                          {presetFormPaperSize === "2R" && <span className="w-1.5 h-1.5 rounded-full bg-white dark:bg-zinc-950" />}
+          <div className="flex-1 overflow-hidden">
+            <SlotLayoutEditor
+              slots={presetFormSlots}
+              onChange={setPresetFormSlots}
+              overlay={presetFormOverlay}
+              overlayX={presetFormOverlayX}
+              overlayY={presetFormOverlayY}
+              overlayW={presetFormOverlayW}
+              overlayH={presetFormOverlayH}
+              overlayRotation={presetFormOverlayRotation}
+              onChangeOverlay={(x, y, w, h, rot) => {
+                setPresetFormOverlayX(x);
+                setPresetFormOverlayY(y);
+                setPresetFormOverlayW(w);
+                setPresetFormOverlayH(h);
+                setPresetFormOverlayRotation(rot);
+              }}
+              paperSize={presetFormPaperSize}
+              sidebarOpen={sidebarOpen}
+              sidebarContent={
+                <form id="preset-form" onSubmit={handlePresetSubmit} className="space-y-6">
+                  
+                  <div className="space-y-3">
+                    <Label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Ukuran Kertas</Label>
+                    <div className="grid grid-cols-2 gap-3">
+                      {/* 2R Card */}
+                      <div 
+                        onClick={() => setPresetFormPaperSize("2R")}
+                        className={`flex flex-col p-3 rounded-xl border cursor-pointer select-none transition-all duration-200 hover:-translate-y-0.5 hover:shadow-sm ${
+                          presetFormPaperSize === "2R" 
+                            ? "border-zinc-900 dark:border-zinc-100 bg-zinc-50 dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100" 
+                            : "border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 text-zinc-500 dark:text-zinc-400"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-xs font-semibold">Ukuran 2R</span>
+                          <div className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center ${
+                            presetFormPaperSize === "2R" ? "border-zinc-900 dark:border-zinc-100 bg-zinc-900 dark:bg-zinc-100" : "border-zinc-300 dark:border-zinc-750 bg-transparent"
+                          }`}>
+                            {presetFormPaperSize === "2R" && <span className="w-1.5 h-1.5 rounded-full bg-white dark:bg-zinc-950" />}
+                          </div>
+                        </div>
+                        
+                        <div className="mt-2 h-10 w-full flex items-center justify-center bg-zinc-50 dark:bg-zinc-900/50 rounded-lg border border-zinc-100 dark:border-zinc-800/80 p-1 shrink-0">
+                          <div className={`h-full aspect-[1/3] border rounded ${
+                            presetFormPaperSize === "2R" ? "border-zinc-400 bg-zinc-400/20" : "border-zinc-300 dark:border-zinc-700 bg-zinc-200 dark:bg-zinc-800"
+                          }`} />
                         </div>
                       </div>
-                      
-                      <div className="mt-2 h-10 w-full flex items-center justify-center bg-zinc-50 dark:bg-zinc-900/50 rounded-lg border border-zinc-100 dark:border-zinc-800/80 p-1 shrink-0">
-                        <div className={`h-full aspect-[1/3] border rounded ${
-                          presetFormPaperSize === "2R" ? "border-zinc-400 bg-zinc-400/20" : "border-zinc-300 dark:border-zinc-700 bg-zinc-200 dark:bg-zinc-800"
-                        }`} />
-                      </div>
-                    </div>
 
-                    {/* 4R Card */}
-                    <div 
-                      onClick={() => setPresetFormPaperSize("4R")}
-                      className={`flex flex-col p-3 rounded-xl border cursor-pointer select-none transition-all duration-200 hover:-translate-y-0.5 hover:shadow-sm ${
-                        presetFormPaperSize === "4R" 
-                          ? "border-zinc-900 dark:border-zinc-100 bg-zinc-50 dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100" 
-                          : "border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 text-zinc-500 dark:text-zinc-400"
-                      }`}
-                    >
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="text-xs font-semibold">Ukuran 4R</span>
-                        <div className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center ${
-                          presetFormPaperSize === "4R" ? "border-zinc-900 dark:border-zinc-100 bg-zinc-900 dark:bg-zinc-100" : "border-zinc-300 dark:border-zinc-750 bg-transparent"
-                        }`}>
-                          {presetFormPaperSize === "4R" && <span className="w-1.5 h-1.5 rounded-full bg-white dark:bg-zinc-950" />}
+                      {/* 4R Card */}
+                      <div 
+                        onClick={() => setPresetFormPaperSize("4R")}
+                        className={`flex flex-col p-3 rounded-xl border cursor-pointer select-none transition-all duration-200 hover:-translate-y-0.5 hover:shadow-sm ${
+                          presetFormPaperSize === "4R" 
+                            ? "border-zinc-900 dark:border-zinc-100 bg-zinc-50 dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100" 
+                            : "border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 text-zinc-500 dark:text-zinc-400"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-xs font-semibold">Ukuran 4R</span>
+                          <div className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center ${
+                            presetFormPaperSize === "4R" ? "border-zinc-900 dark:border-zinc-100 bg-zinc-900 dark:bg-zinc-100" : "border-zinc-300 dark:border-zinc-750 bg-transparent"
+                          }`}>
+                            {presetFormPaperSize === "4R" && <span className="w-1.5 h-1.5 rounded-full bg-white dark:bg-zinc-950" />}
+                          </div>
                         </div>
-                      </div>
-                      
-                      <div className="mt-2 h-10 w-full flex items-center justify-center bg-zinc-50 dark:bg-zinc-900/50 rounded-lg border border-zinc-100 dark:border-zinc-800/80 p-1 shrink-0">
-                        <div className={`h-full aspect-[2/3] border rounded ${
-                          presetFormPaperSize === "4R" ? "border-zinc-400 bg-zinc-400/20" : "border-zinc-300 dark:border-zinc-700 bg-zinc-200 dark:bg-zinc-800"
-                        }`} />
+                        
+                        <div className="mt-2 h-10 w-full flex items-center justify-center bg-zinc-50 dark:bg-zinc-900/50 rounded-lg border border-zinc-100 dark:border-zinc-800/80 p-1 shrink-0">
+                          <div className={`h-full aspect-[2/3] border rounded ${
+                            presetFormPaperSize === "4R" ? "border-zinc-400 bg-zinc-400/20" : "border-zinc-300 dark:border-zinc-700 bg-zinc-200 dark:bg-zinc-800"
+                          }`} />
+                        </div>
                       </div>
                     </div>
                   </div>
-                </div>
 
-                <div className="space-y-3">
-                  <Label className="text-sm font-medium text-zinc-700 dark:text-zinc-300 flex justify-between">Gambar Overlay <span className="text-zinc-400 font-normal">Opsional</span></Label>
-                  {presetFormOverlay ? (
-                    <div className="flex flex-col gap-3 p-3 bg-zinc-50 dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800 rounded-2xl">
-                      {/* Big Preview Area */}
-                      <div className="w-full h-64 rounded-xl flex items-center justify-center border border-zinc-200 dark:border-zinc-800 overflow-hidden relative bg-white dark:bg-zinc-950 shadow-inner"
-                           style={{ backgroundImage: 'repeating-conic-gradient(#cbd5e1 0% 25%, transparent 0% 50%)', backgroundSize: '16px 16px' }}>
-                        {/* overlay filter for better visual style */}
-                        <div className="absolute inset-0 opacity-[0.12] dark:opacity-[0.04]" style={{ backgroundImage: 'repeating-conic-gradient(#000000 0% 25%, transparent 0% 50%)', backgroundSize: '16px 16px' }} />
+                  <div className="space-y-3">
+                    <Label className="text-sm font-medium text-zinc-700 dark:text-zinc-300 flex justify-between">Gambar Overlay <span className="text-zinc-400 font-normal">Opsional</span></Label>
+                    {presetFormOverlay ? (
+                      <div className="flex flex-col gap-3 p-3 bg-zinc-50 dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800 rounded-2xl">
+                        {/* Big Preview Area */}
+                        <div className="w-full h-64 rounded-xl flex items-center justify-center border border-zinc-200 dark:border-zinc-800 overflow-hidden relative bg-white dark:bg-zinc-950 shadow-inner"
+                             style={{ backgroundImage: 'repeating-conic-gradient(#cbd5e1 0% 25%, transparent 0% 50%)', backgroundSize: '16px 16px' }}>
+                          {/* overlay filter for better visual style */}
+                          <div className="absolute inset-0 opacity-[0.12] dark:opacity-[0.04]" style={{ backgroundImage: 'repeating-conic-gradient(#000000 0% 25%, transparent 0% 50%)', backgroundSize: '16px 16px' }} />
+                          
+                          {overlayUploading ? (
+                            <div className="absolute inset-0 flex items-center justify-center bg-zinc-100/80 dark:bg-zinc-900/80 backdrop-blur-sm z-10">
+                              <svg className="animate-spin w-6 h-6 text-zinc-500" fill="none" viewBox="0 0 24 24">
+                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+                              </svg>
+                            </div>
+                          ) : (
+                            <img src={presetFormOverlay} alt="overlay" className="max-w-full max-h-full object-contain p-4 relative z-10 drop-shadow-md" />
+                          )}
+                        </div>
                         
-                        {overlayUploading ? (
-                          <div className="absolute inset-0 flex items-center justify-center bg-zinc-100/80 dark:bg-zinc-900/80 backdrop-blur-sm z-10">
-                            <svg className="animate-spin w-6 h-6 text-zinc-500" fill="none" viewBox="0 0 24 24">
-                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
-                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
-                            </svg>
-                          </div>
-                        ) : (
-                          <img src={presetFormOverlay} alt="overlay" className="max-w-full max-h-full object-contain p-4 relative z-10 drop-shadow-md" />
-                        )}
+                        {/* Side-by-side action buttons */}
+                        <div className="w-full">
+                          {overlayUploading ? (
+                            <div className="text-xs font-semibold text-center text-blue-500 dark:text-blue-400 py-1 select-none animate-pulse">
+                              Memproses gambar...
+                            </div>
+                          ) : (
+                            <div className="grid grid-cols-2 gap-2">
+                              <Button type="button" onClick={openImageEditor} variant="outline" className="h-9 text-xs gap-1.5 border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 hover:bg-zinc-100 dark:hover:bg-zinc-900">
+                                <Palette className="w-3.5 h-3.5" /> Editor
+                              </Button>
+                              <Button type="button" onClick={() => { setPresetFormOverlay(undefined); setOverlayUploading(false); }} variant="destructive" className="h-9 text-xs gap-1.5 bg-red-50 text-red-650 hover:bg-red-100 dark:bg-red-900/20 dark:text-red-400 dark:hover:bg-red-900/40">
+                                <Trash2 className="w-3.5 h-3.5" /> Hapus
+                              </Button>
+                            </div>
+                          )}
+                        </div>
                       </div>
-                      
-                      {/* Side-by-side action buttons */}
-                      <div className="w-full">
-                        {overlayUploading ? (
-                          <div className="text-xs font-semibold text-center text-blue-500 dark:text-blue-400 py-1 select-none animate-pulse">
-                            Memproses gambar...
-                          </div>
-                        ) : (
-                          <div className="grid grid-cols-2 gap-2">
-                            <Button type="button" onClick={openImageEditor} variant="outline" className="h-9 text-xs gap-1.5 border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 hover:bg-zinc-100 dark:hover:bg-zinc-900">
-                              <Palette className="w-3.5 h-3.5" /> Editor
-                            </Button>
-                            <Button type="button" onClick={() => { setPresetFormOverlay(undefined); setOverlayUploading(false); }} variant="destructive" className="h-9 text-xs gap-1.5 bg-red-50 text-red-650 hover:bg-red-100 dark:bg-red-900/20 dark:text-red-400 dark:hover:bg-red-900/40">
-                              <Trash2 className="w-3.5 h-3.5" /> Hapus
-                            </Button>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  ) : (
-                    <label className="border border-dashed border-zinc-300 dark:border-zinc-800 rounded-lg p-6 flex flex-col items-center justify-center gap-3 cursor-pointer hover:bg-zinc-50 dark:hover:bg-zinc-900 transition-colors text-center group">
-                      <input type="file" accept="image/png, image/jpeg" onChange={handlePresetOverlayUpload} className="hidden" />
-                      <div className="w-12 h-12 rounded-full bg-zinc-100 dark:bg-zinc-800 group-hover:scale-105 transition-transform flex items-center justify-center">
-                        <ImagePlus className="w-5 h-5 text-zinc-500" />
-                      </div>
-                      <div>
-                        <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Pilih Gambar</p>
-                        <p className="text-[10px] text-zinc-500 mt-1">Maksimal 8MB (PNG/JPG).</p>
-                      </div>
-                    </label>
-                  )}
-                </div>
-              </form>
-            </div>
-            
-            {/* Panel Kanvas Kanan */}
-            <div className="flex-1 bg-zinc-50/50 dark:bg-zinc-900/20 p-4 lg:p-6 flex flex-col overflow-hidden">
-              <div className="flex-1 min-h-0 overflow-hidden">
-                <SlotLayoutEditor
-                  slots={presetFormSlots} onChange={setPresetFormSlots} overlay={presetFormOverlay}
-                  overlayX={presetFormOverlayX} overlayY={presetFormOverlayY}
-                  overlayW={presetFormOverlayW} overlayH={presetFormOverlayH} overlayRotation={presetFormOverlayRotation}
-                  onChangeOverlay={(x, y, w, h, rot) => { setPresetFormOverlayX(x); setPresetFormOverlayY(y); setPresetFormOverlayW(w); setPresetFormOverlayH(h); setPresetFormOverlayRotation(rot); }}
-                  paperSize={presetFormPaperSize}
-                />
-              </div>
-            </div>
+                    ) : (
+                      <label className="border border-dashed border-zinc-300 dark:border-zinc-800 rounded-lg p-6 flex flex-col items-center justify-center gap-3 cursor-pointer hover:bg-zinc-50 dark:hover:bg-zinc-900 transition-colors text-center group">
+                        <input type="file" accept="image/png, image/jpeg" onChange={handlePresetOverlayUpload} className="hidden" />
+                        <div className="w-12 h-12 rounded-full bg-zinc-100 dark:bg-zinc-800 group-hover:scale-105 transition-transform flex items-center justify-center">
+                          <ImagePlus className="w-5 h-5 text-zinc-500" />
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Pilih Gambar</p>
+                          <p className="text-[10px] text-zinc-500 mt-1">Maksimal 8MB (PNG/JPG).</p>
+                        </div>
+                      </label>
+                    )}
+                  </div>
+                </form>
+              }
+            />
           </div>
           
           <div className="px-6 py-4 border-t border-zinc-200 dark:border-zinc-800 flex justify-end gap-3 shrink-0 bg-white dark:bg-zinc-950">
