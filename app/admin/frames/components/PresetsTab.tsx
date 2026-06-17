@@ -95,16 +95,13 @@ export default function PresetsTab({ config, addPresetTemplate, updatePresetTemp
     e.preventDefault();
     if (isSaving) return;
 
-    // Auto-generate name for new templates, keep existing name for edits
     let nameToSubmit = presetFormName.trim();
     if (!presetEditingId) {
       const activeNumber = (config.presetTemplates?.length ?? 0) + 1;
       nameToSubmit = `Template ${presetFormPaperSize} #${activeNumber}`;
-    }
-
-    if (!nameToSubmit) {
-      toast.error("Nama preset tidak boleh kosong.");
-      return;
+    } else if (!nameToSubmit) {
+      const existing = config.presetTemplates?.find(p => p.id === presetEditingId);
+      nameToSubmit = existing?.name ?? `Template #${presetEditingId}`;
     }
 
     setIsSaving(true);
@@ -339,9 +336,7 @@ export default function PresetsTab({ config, addPresetTemplate, updatePresetTemp
                 >
                   {/* PREVIEW IMAGE AREA */}
                   <div className="relative h-48 w-full bg-zinc-50 dark:bg-zinc-900/50 flex items-center justify-center overflow-hidden border-b border-zinc-200 dark:border-zinc-800/50 p-4">
-                    {/* Checkerboard Pattern for transparent overlays */}
                     <div className="absolute inset-0 opacity-[0.15] dark:opacity-[0.05]" style={{ backgroundImage: 'repeating-conic-gradient(#cbd5e1 0% 25%, transparent 0% 50%)', backgroundSize: '16px 16px' }} />
-                    
                     <div className="z-10 relative w-full h-full flex items-center justify-center drop-shadow-md transition-transform duration-300 group-hover:scale-[1.03]">
                       <StripPreview 
                         overlay={preset.imageOverlay} 
@@ -356,7 +351,6 @@ export default function PresetsTab({ config, addPresetTemplate, updatePresetTemp
                       />
                     </div>
                     
-                    {/* Floating Action Buttons */}
                     <div className="absolute top-2 right-2 flex gap-1.5 z-20">
                       <button 
                         onClick={e => { e.stopPropagation(); openEditPreset(preset); }} 
@@ -434,18 +428,17 @@ export default function PresetsTab({ config, addPresetTemplate, updatePresetTemp
 
       {/* DIALOG EDITOR PRESET UTAMA */}
       <Dialog open={presetModalOpen} onOpenChange={open => { if (!open) closePresetModal(); }}>
+        {/* Perubahan utama: h-screen menjadi h-[100dvh] agar menyesuaikan dinamis dengan height browser mobile/tablet */}
         <DialogContent 
           showCloseButton={false}
-          className="bg-white dark:bg-zinc-950 text-zinc-900 dark:text-white w-screen h-screen !max-w-none !max-h-none !rounded-none border-none p-0 !m-0 overflow-hidden flex flex-col shadow-none outline-none z-50"
+          className="bg-white dark:bg-zinc-950 text-zinc-900 dark:text-white w-screen h-[100dvh] !max-w-none !max-h-none !rounded-none border-none p-0 !m-0 overflow-hidden flex flex-col shadow-none outline-none z-50"
         >
-          
-          <div className="px-6 py-4 border-b border-zinc-200 dark:border-zinc-800 flex items-center justify-between shrink-0">
+          <div className="px-6 py-4 border-b border-zinc-200 dark:border-zinc-800 flex items-center justify-between shrink-0 bg-white dark:bg-zinc-950 z-10">
             <div className="flex items-center gap-3.5">
               <div>
                 <DialogTitle className="text-lg font-semibold">{presetEditingId ? "Edit Template Instan" : "Buat Template Instan"}</DialogTitle>
                 <DialogDescription className="sr-only">Atur ukuran kertas, overlay PNG, dan posisi letak jepretan kamera.</DialogDescription>
               </div>
-
             </div>
             <Button
               type="button"
@@ -479,7 +472,6 @@ export default function PresetsTab({ config, addPresetTemplate, updatePresetTemp
               onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
               sidebarContent={
                 <form id="preset-form" onSubmit={handlePresetSubmit} className="space-y-6">
-                  
                   <div className="space-y-3">
                     <Label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Ukuran Kertas</Label>
                     <div className="grid grid-cols-2 gap-3">
@@ -500,7 +492,6 @@ export default function PresetsTab({ config, addPresetTemplate, updatePresetTemp
                             {presetFormPaperSize === "2R" && <span className="w-1.5 h-1.5 rounded-full bg-white dark:bg-zinc-950" />}
                           </div>
                         </div>
-                        
                         <div className="mt-2 h-10 w-full flex items-center justify-center bg-zinc-50 dark:bg-zinc-900/50 rounded-lg border border-zinc-100 dark:border-zinc-800/80 p-1 shrink-0">
                           <div className={`h-full aspect-[1/3] border rounded ${
                             presetFormPaperSize === "2R" ? "border-zinc-400 bg-zinc-400/20" : "border-zinc-300 dark:border-zinc-700 bg-zinc-200 dark:bg-zinc-800"
@@ -525,7 +516,6 @@ export default function PresetsTab({ config, addPresetTemplate, updatePresetTemp
                             {presetFormPaperSize === "4R" && <span className="w-1.5 h-1.5 rounded-full bg-white dark:bg-zinc-950" />}
                           </div>
                         </div>
-                        
                         <div className="mt-2 h-10 w-full flex items-center justify-center bg-zinc-50 dark:bg-zinc-900/50 rounded-lg border border-zinc-100 dark:border-zinc-800/80 p-1 shrink-0">
                           <div className={`h-full aspect-[2/3] border rounded ${
                             presetFormPaperSize === "4R" ? "border-zinc-400 bg-zinc-400/20" : "border-zinc-300 dark:border-zinc-700 bg-zinc-200 dark:bg-zinc-800"
@@ -539,12 +529,9 @@ export default function PresetsTab({ config, addPresetTemplate, updatePresetTemp
                     <Label className="text-sm font-medium text-zinc-700 dark:text-zinc-300 flex justify-between">Gambar Overlay <span className="text-zinc-400 font-normal">Opsional</span></Label>
                     {presetFormOverlay ? (
                       <div className="flex flex-col gap-3 p-3 bg-zinc-50 dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800 rounded-2xl">
-                        {/* Big Preview Area */}
                         <div className="w-full h-64 rounded-xl flex items-center justify-center border border-zinc-200 dark:border-zinc-800 overflow-hidden relative bg-white dark:bg-zinc-950 shadow-inner"
                              style={{ backgroundImage: 'repeating-conic-gradient(#cbd5e1 0% 25%, transparent 0% 50%)', backgroundSize: '16px 16px' }}>
-                          {/* overlay filter for better visual style */}
                           <div className="absolute inset-0 opacity-[0.12] dark:opacity-[0.04]" style={{ backgroundImage: 'repeating-conic-gradient(#000000 0% 25%, transparent 0% 50%)', backgroundSize: '16px 16px' }} />
-                          
                           {overlayUploading ? (
                             <div className="absolute inset-0 flex items-center justify-center bg-zinc-100/80 dark:bg-zinc-900/80 backdrop-blur-sm z-10">
                               <svg className="animate-spin w-6 h-6 text-zinc-500" fill="none" viewBox="0 0 24 24">
@@ -556,8 +543,6 @@ export default function PresetsTab({ config, addPresetTemplate, updatePresetTemp
                             <img src={presetFormOverlay} alt="overlay" className="max-w-full max-h-full object-contain p-4 relative z-10 drop-shadow-md" />
                           )}
                         </div>
-                        
-                        {/* Side-by-side action buttons */}
                         <div className="w-full">
                           {overlayUploading ? (
                             <div className="text-xs font-semibold text-center text-blue-500 dark:text-blue-400 py-1 select-none animate-pulse">
@@ -593,7 +578,11 @@ export default function PresetsTab({ config, addPresetTemplate, updatePresetTemp
             />
           </div>
           
-          <div className="px-6 py-4 border-t border-zinc-200 dark:border-zinc-800 flex justify-end gap-3 shrink-0 bg-white dark:bg-zinc-950">
+          {/* Perubahan: Menambahkan pb-safe area menggunakan inline style environment variable */}
+          <div 
+            className="px-6 pt-4 pb-4 border-t border-zinc-200 dark:border-zinc-800 flex justify-end gap-3 shrink-0 bg-white dark:bg-zinc-950 z-10"
+            style={{ paddingBottom: "max(1rem, env(safe-area-inset-bottom))" }}
+          >
             <Button type="button" variant="ghost" onClick={closePresetModal} disabled={isSaving} className="h-10 px-6 text-zinc-600 hover:bg-zinc-100">Batal</Button>
             <Button type="submit" form="preset-form" disabled={isSaving || overlayUploading} className="bg-zinc-900 text-white hover:bg-zinc-800 dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-200 h-10 px-8 text-sm flex items-center gap-2">
               {isSaving ? (
@@ -612,8 +601,9 @@ export default function PresetsTab({ config, addPresetTemplate, updatePresetTemp
 
       {/* DIALOG SECONDARY: IMAGE EDITOR (CROP & CHROMA KEY) */}
       <Dialog open={editorOpen} onOpenChange={open => { if (!open) setEditorOpen(false); }}>
-        <DialogContent className="bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 text-zinc-900 dark:text-white !max-w-[900px] w-[95vw] sm:rounded-2xl p-0 shadow-2xl flex flex-col z-[60]">
-          <div className="px-5 py-4 border-b border-zinc-200 dark:border-zinc-800 flex items-center justify-between bg-zinc-50 dark:bg-zinc-900/50">
+        {/* Perubahan: height constraint menggunakan max-h-[100dvh] dan overflow-hidden */}
+        <DialogContent className="bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 text-zinc-900 dark:text-white !max-w-[900px] w-[95vw] max-h-[100dvh] sm:rounded-2xl p-0 shadow-2xl flex flex-col z-[60] overflow-hidden">
+          <div className="px-5 py-4 border-b border-zinc-200 dark:border-zinc-800 flex items-center justify-between bg-zinc-50 dark:bg-zinc-900/50 shrink-0">
             <div>
               <h3 className="text-base font-semibold">Editor Gambar</h3>
               <p className="text-xs text-zinc-500">Edit lapisan overlay sebelum dimasukkan ke kanvas.</p>
@@ -621,9 +611,9 @@ export default function PresetsTab({ config, addPresetTemplate, updatePresetTemp
             <button onClick={() => setEditorOpen(false)} className="text-zinc-400 hover:text-zinc-900 dark:hover:text-white bg-zinc-200/50 dark:bg-zinc-800 p-1.5 rounded-md"><X className="w-4 h-4" /></button>
           </div>
 
-          <div className="flex flex-col md:flex-row min-h-[500px]">
+          <div className="flex flex-col md:flex-row flex-1 overflow-y-auto">
             {/* Kiri: Preview Area */}
-            <div className="flex-1 p-6 flex flex-col items-center justify-center relative overflow-hidden" 
+            <div className="flex-1 p-6 flex flex-col items-center justify-center relative overflow-hidden min-h-[400px] md:min-h-0" 
                  style={{ 
                    backgroundImage: 'repeating-conic-gradient(#e5e7eb 0% 25%, transparent 0% 50%)', 
                    backgroundSize: '20px 20px',
@@ -636,20 +626,17 @@ export default function PresetsTab({ config, addPresetTemplate, updatePresetTemp
                   src={activeMode === 'chroma' && chromaPreviewImage ? chromaPreviewImage : workingImage} 
                   alt="Editor Workspace" 
                   onClick={handleImageClick}
-                  className={`max-w-full max-h-[60vh] object-contain block ${activeMode === 'chroma' && isPickingColor ? 'cursor-crosshair ring-2 ring-blue-500' : ''}`}
+                  className={`max-w-full max-h-[50vh] object-contain block ${activeMode === 'chroma' && isPickingColor ? 'cursor-crosshair ring-2 ring-blue-500' : ''}`}
                   draggable={false}
                 />
                 
-                {/* INTERACTIVE CROP BOX UI */}
                 {activeMode === 'crop' && (
                   <div className="absolute inset-0 z-10 pointer-events-none">
-                    {/* Shadow luar crop */}
                     <div className="absolute top-0 left-0 right-0 bg-black/60 backdrop-blur-[1px]" style={{ height: `${crop.top}%` }} />
                     <div className="absolute bottom-0 left-0 right-0 bg-black/60 backdrop-blur-[1px]" style={{ height: `${100 - crop.top - crop.height}%` }} />
                     <div className="absolute bg-black/60 backdrop-blur-[1px]" style={{ top: `${crop.top}%`, height: `${crop.height}%`, left: 0, width: `${crop.left}%` }} />
                     <div className="absolute bg-black/60 backdrop-blur-[1px]" style={{ top: `${crop.top}%`, height: `${crop.height}%`, right: 0, width: `${100 - crop.left - crop.width}%` }} />
 
-                    {/* Bounding Box Potongan */}
                     <div
                       className="absolute border-[1.5px] border-blue-500 pointer-events-auto cursor-move flex items-center justify-center group select-none touch-none"
                       style={{ top: `${crop.top}%`, left: `${crop.left}%`, width: `${crop.width}%`, height: `${crop.height}%` }}
@@ -661,29 +648,16 @@ export default function PresetsTab({ config, addPresetTemplate, updatePresetTemp
                          <div className="border-r border-white/40"></div><div className="border-r border-white/40"></div><div></div>
                       </div>
 
-                      {/* Handles with expanded touch area for mobile/tablet fingers */}
-                      <div 
-                        className="absolute w-8 h-8 -top-4 -left-4 flex items-center justify-center cursor-nwse-resize select-none touch-none active:scale-110 transition-transform" 
-                        onPointerDown={(e) => onCropStart(e, 'nw')}
-                      >
+                      <div className="absolute w-8 h-8 -top-4 -left-4 flex items-center justify-center cursor-nwse-resize select-none touch-none active:scale-110 transition-transform" onPointerDown={(e) => onCropStart(e, 'nw')}>
                         <div className="w-4 h-4 bg-white border-2 border-blue-500 rounded-full shadow-sm pointer-events-none" />
                       </div>
-                      <div 
-                        className="absolute w-8 h-8 -top-4 -right-4 flex items-center justify-center cursor-nesw-resize select-none touch-none active:scale-110 transition-transform" 
-                        onPointerDown={(e) => onCropStart(e, 'ne')}
-                      >
+                      <div className="absolute w-8 h-8 -top-4 -right-4 flex items-center justify-center cursor-nesw-resize select-none touch-none active:scale-110 transition-transform" onPointerDown={(e) => onCropStart(e, 'ne')}>
                         <div className="w-4 h-4 bg-white border-2 border-blue-500 rounded-full shadow-sm pointer-events-none" />
                       </div>
-                      <div 
-                        className="absolute w-8 h-8 -bottom-4 -left-4 flex items-center justify-center cursor-nesw-resize select-none touch-none active:scale-110 transition-transform" 
-                        onPointerDown={(e) => onCropStart(e, 'sw')}
-                      >
+                      <div className="absolute w-8 h-8 -bottom-4 -left-4 flex items-center justify-center cursor-nesw-resize select-none touch-none active:scale-110 transition-transform" onPointerDown={(e) => onCropStart(e, 'sw')}>
                         <div className="w-4 h-4 bg-white border-2 border-blue-500 rounded-full shadow-sm pointer-events-none" />
                       </div>
-                      <div 
-                        className="absolute w-8 h-8 -bottom-4 -right-4 flex items-center justify-center cursor-nwse-resize select-none touch-none active:scale-110 transition-transform" 
-                        onPointerDown={(e) => onCropStart(e, 'se')}
-                      >
+                      <div className="absolute w-8 h-8 -bottom-4 -right-4 flex items-center justify-center cursor-nwse-resize select-none touch-none active:scale-110 transition-transform" onPointerDown={(e) => onCropStart(e, 'se')}>
                         <div className="w-4 h-4 bg-white border-2 border-blue-500 rounded-full shadow-sm pointer-events-none" />
                       </div>
                     </div>
@@ -799,7 +773,10 @@ export default function PresetsTab({ config, addPresetTemplate, updatePresetTemp
             </div>
           </div>
 
-          <div className="px-5 py-4 border-t border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 flex justify-end">
+          <div 
+            className="px-5 pt-4 pb-4 border-t border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 flex justify-end shrink-0"
+            style={{ paddingBottom: "max(1rem, env(safe-area-inset-bottom))" }}
+          >
             <Button onClick={applyAllImageEdits} className="bg-zinc-900 text-white hover:bg-zinc-800 dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-200 px-8">
               Selesai & Tutup Editor
             </Button>

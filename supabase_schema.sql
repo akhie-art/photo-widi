@@ -418,8 +418,8 @@ create policy "Delete Access for Sticker Assets" on storage.objects
 
 
 -- ── 9d. Setup Supabase Storage Bucket 'event-assets' ─────────────────────────
--- Bucket khusus untuk menyimpan logo event, QRIS, atau aset dekorasi event lainnya
--- Kolom logoUrl di config_json menyimpan URL publik dari bucket ini
+-- Bucket khusus untuk menyimpan logo & QRIS per-event di tabel 'events'
+-- Setiap event di halaman Manajemen Event menyimpan asetnya di sini
 insert into storage.buckets (id, name, public)
 values ('event-assets', 'event-assets', true)
 on conflict (id) do nothing;
@@ -440,6 +440,34 @@ create policy "Update Access for Event Assets" on storage.objects
 drop policy if exists "Delete Access for Event Assets" on storage.objects;
 create policy "Delete Access for Event Assets" on storage.objects
   for delete using (bucket_id = 'event-assets');
+
+
+-- ── 9e. Setup Supabase Storage Bucket 'booth-config' ─────────────────────────
+-- Bucket khusus untuk menyimpan aset konfigurasi utama booth (tabel event_config):
+-- • Logo utama photobooth (logoUrl di config_json)
+-- • Barcode QRIS utama (qrisUrl di config_json)
+-- Dipisahkan dari event-assets agar konfigurasi default booth tidak bercampur
+-- dengan aset per-event dari halaman Manajemen Event.
+insert into storage.buckets (id, name, public)
+values ('booth-config', 'booth-config', true)
+on conflict (id) do nothing;
+
+-- Kebijakan RLS untuk bucket booth-config
+drop policy if exists "Public Access for Booth Config" on storage.objects;
+create policy "Public Access for Booth Config" on storage.objects
+  for select using (bucket_id = 'booth-config');
+
+drop policy if exists "Insert Access for Booth Config" on storage.objects;
+create policy "Insert Access for Booth Config" on storage.objects
+  for insert with check (bucket_id = 'booth-config');
+
+drop policy if exists "Update Access for Booth Config" on storage.objects;
+create policy "Update Access for Booth Config" on storage.objects
+  for update using (bucket_id = 'booth-config');
+
+drop policy if exists "Delete Access for Booth Config" on storage.objects;
+create policy "Delete Access for Booth Config" on storage.objects
+  for delete using (bucket_id = 'booth-config');
 
 
 -- ── 10. Fungsi RPC untuk Manajemen Operator dari Admin Panel ──────────────────
@@ -659,4 +687,51 @@ begin
   return coalesce(v_size, 0);
 end;
 $$ language plpgsql;
+
+
+-- ── 12. Tabel Manajemen Event ───────────────────────────────────────────
+create table if not exists events (
+  id          text primary key,
+  name        text not null,
+  date        text,
+  location    text,
+  price_per_session integer default 25000,
+  logo_url    text,
+  qris_url    text,
+  is_active   boolean default false,
+  allowed_presets text[] default '{}',
+  allowed_filters text[] default '{}',
+  allowed_stickers text[] default '{}',
+  created_at  timestamptz default now(),
+  updated_at  timestamptz default now()
+);
+
+-- Pastikan kolom baru ditambahkan jika tabel events sudah ada sebelumnya
+alter table events add column if not exists allowed_presets text[] default '{}';
+alter table events add column if not exists allowed_filters text[] default '{}';
+alter table events add column if not exists allowed_stickers text[] default '{}';
+
+alter table events enable row level security;
+drop policy if exists "public read events" on events;
+drop policy if exists "public insert events" on events;
+drop policy if exists "public update events" on events;
+drop policy if exists "public delete events" on events;
+create policy "public read events" on events for select using (true);
+create policy "public insert events" on events for insert with check (true);
+create policy "public update events" on events for update using (true);
+create policy "public delete events" on events for delete using (true);
+
+-- Tambahkan kolom event_name ke photo_strips
+alter table photo_strips add column if not exists event_name text;
+
+-- Tambahkan table events ke publikasi realtime jika belum ada
+do $$
+begin
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime' and tablename = 'events'
+  ) then
+    alter publication supabase_realtime add table events;
+  end if;
+end $$;
 

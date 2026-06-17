@@ -61,7 +61,12 @@ export default function PreviewScreen({
   } | null>(null);
 
   // Filter allowed stickers
-  const allowedStickers = config.customStickers || [];
+  const allowedStickers = (config.customStickers || []).filter((s) => {
+    if (!config.allowedStickers || config.allowedStickers.length === 0) {
+      return true;
+    }
+    return config.allowedStickers.includes(s.id);
+  });
 
   const addSticker = (stickerId: string) => {
     // eslint-disable-next-line react-hooks/purity

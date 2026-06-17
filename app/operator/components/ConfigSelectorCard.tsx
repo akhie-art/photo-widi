@@ -35,7 +35,12 @@ export default function ConfigSelectorCard({
   onSelectFilter,
   onAddSticker,
 }: ConfigSelectorCardProps) {
-  const stickerList: StickerAsset[] = config.customStickers ?? [];
+  const stickerList: StickerAsset[] = (config.customStickers ?? []).filter((s) => {
+    if (!config.allowedStickers || config.allowedStickers.length === 0) {
+      return true;
+    }
+    return config.allowedStickers.includes(s.id);
+  });
 
   return (
     <div
@@ -104,7 +109,13 @@ export default function ConfigSelectorCard({
             {config.presetTemplates?.length ? (
               <div className="grid grid-cols-2 portrait:sm:grid-cols-3 portrait:md:grid-cols-4 portrait:lg:grid-cols-6 portrait:xl:grid-cols-8 landscape:grid-cols-2 gap-3">
                 {(config.presetTemplates || [])
-                  .filter((item) => item && item.id)
+                  .filter((item) => {
+                    if (!item || !item.id) return false;
+                    if (!config.allowedPresets || config.allowedPresets.length === 0) {
+                      return true;
+                    }
+                    return config.allowedPresets.includes(item.id);
+                  })
                   .map((item) => {
                     const isActive = activeFrameId === item.id;
                     const previewImage = (item as any).thumbnailUrl || (item as any).previewUrl || item.imageOverlay || (item as any).frameUrl || (item as any).backgroundUrl;

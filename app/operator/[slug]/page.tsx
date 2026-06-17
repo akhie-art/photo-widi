@@ -372,6 +372,18 @@ const handleUpdateSticker = (id: string, updates: Partial<PlacedSticker>) => {
         // eslint-disable-next-line react-hooks/set-state-in-effect
         setActiveFilter(fallbackFilter);
       }
+      const allowedPresets = config.allowedPresets;
+      const hasPresetRestrictions = allowedPresets && allowedPresets.length > 0;
+      if (hasPresetRestrictions && !allowedPresets.includes(activeFrameId)) {
+        const fallbackPresetId = allowedPresets[0];
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        setActiveFrameId(fallbackPresetId);
+        const fallbackTemplate = config.presetTemplates?.find((p) => p.id === fallbackPresetId);
+        if (fallbackTemplate) {
+          // eslint-disable-next-line react-hooks/set-state-in-effect
+          setCustomText(config.frameText || fallbackTemplate.name || "");
+        }
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [config, activeLayout, activeFilter, activeFrameId]);

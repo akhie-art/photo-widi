@@ -28,12 +28,14 @@ export default function ConfigTab({ config, updateConfig }: ConfigTabProps) {
     "preset-overlays": false,
     "sticker-assets": false,
     "event-assets": false,
+    "booth-config": false,
   });
   const [bucketSizes, setBucketSizes] = useState<Record<string, number>>({
     "photostrips": 0,
     "preset-overlays": 0,
     "sticker-assets": 0,
     "event-assets": 0,
+    "booth-config": 0,
   });
   const [isRpcActive, setIsRpcActive] = useState(true);
   const [checkingBuckets, setCheckingBuckets] = useState(true);
@@ -92,7 +94,7 @@ export default function ConfigTab({ config, updateConfig }: ConfigTabProps) {
   // Check storage buckets connectivity & calculate size (RLS-safe queries)
   const checkStorageBuckets = useCallback(async () => {
     setCheckingBuckets(true);
-    const buckets = ["photostrips", "preset-overlays", "sticker-assets", "event-assets"];
+    const buckets = ["photostrips", "preset-overlays", "sticker-assets", "event-assets", "booth-config"];
     
     try {
       // 1. Test RPC get_bucket_size availability
@@ -214,7 +216,7 @@ create policy "Update Access for Sticker Assets" on storage.objects for update u
 drop policy if exists "Delete Access for Sticker Assets" on storage.objects;
 create policy "Delete Access for Sticker Assets" on storage.objects for delete using (bucket_id = 'sticker-assets');
 
--- 4. Bucket 'event-assets'
+-- 4. Bucket 'event-assets' (logo & QRIS per-event di Manajemen Event)
 insert into storage.buckets (id, name, public) values ('event-assets', 'event-assets', true) on conflict (id) do nothing;
 drop policy if exists "Public Access for Event Assets" on storage.objects;
 create policy "Public Access for Event Assets" on storage.objects for select using (bucket_id = 'event-assets');
@@ -225,7 +227,18 @@ create policy "Update Access for Event Assets" on storage.objects for update usi
 drop policy if exists "Delete Access for Event Assets" on storage.objects;
 create policy "Delete Access for Event Assets" on storage.objects for delete using (bucket_id = 'event-assets');
 
--- 5. Fungsi RPC untuk menghitung ukuran storage bucket (get_bucket_size)
+-- 5. Bucket 'booth-config' (logo & QRIS konfigurasi utama booth)
+insert into storage.buckets (id, name, public) values ('booth-config', 'booth-config', true) on conflict (id) do nothing;
+drop policy if exists "Public Access for Booth Config" on storage.objects;
+create policy "Public Access for Booth Config" on storage.objects for select using (bucket_id = 'booth-config');
+drop policy if exists "Insert Access for Booth Config" on storage.objects;
+create policy "Insert Access for Booth Config" on storage.objects for insert with check (bucket_id = 'booth-config');
+drop policy if exists "Update Access for Booth Config" on storage.objects;
+create policy "Update Access for Booth Config" on storage.objects for update using (bucket_id = 'booth-config');
+drop policy if exists "Delete Access for Booth Config" on storage.objects;
+create policy "Delete Access for Booth Config" on storage.objects for delete using (bucket_id = 'booth-config');
+
+-- 6. Fungsi RPC untuk menghitung ukuran storage bucket (get_bucket_size)
 create or replace function get_bucket_size(p_bucket_id text)
 returns bigint
 security definer
@@ -494,6 +507,13 @@ $$ language plpgsql;`;
                   bg: "bg-rose-500/5",
                   dot: "bg-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.5)]",
                   text: "text-rose-600 dark:text-rose-400",
+                },
+                "booth-config": {
+                  color: "bg-amber-500 dark:bg-amber-400",
+                  border: "border-amber-500/20 dark:border-amber-500/10",
+                  bg: "bg-amber-500/5",
+                  dot: "bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.5)]",
+                  text: "text-amber-600 dark:text-amber-400",
                 },
               };
 

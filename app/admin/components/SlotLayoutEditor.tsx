@@ -126,6 +126,10 @@ export default function SlotLayoutEditor({
   
   const [zoom, setZoom] = useState(paperSize === "2R" ? 1.5 : 1);
   const zoomRef = useRef(zoom);
+  
+  // Ref untuk melacak apakah gestur multi-touch (seperti pinch) sedang berlangsung
+  const isMultiTouch = useRef(false);
+  
   useEffect(() => {
     zoomRef.current = zoom;
   }, [zoom]);
@@ -150,8 +154,18 @@ export default function SlotLayoutEditor({
     };
 
     const handleTouchStart = (e: TouchEvent) => {
-      if (e.touches.length === 2) {
+      if (e.touches.length >= 2) {
+        // Deteksi multi-touch/pinch aktif
+        isMultiTouch.current = true;
         e.preventDefault();
+        
+        // Batalkan seluruh aktivitas drag jika ada
+        drag.current = null;
+        
+        // Batalkan pemilihan (deselect) otomatis untuk menghindari jari pertama menyeleksi objek saat niatnya zoom
+        setActiveId(null);
+        setEditTarget("slots");
+        
         const t1 = e.touches[0];
         const t2 = e.touches[1];
         touchStartDist.current = Math.hypot(t1.clientX - t2.clientX, t1.clientY - t2.clientY);
@@ -160,7 +174,7 @@ export default function SlotLayoutEditor({
     };
 
     const handleTouchMove = (e: TouchEvent) => {
-      if (e.touches.length === 2 && touchStartDist.current > 0) {
+      if (e.touches.length >= 2 && touchStartDist.current > 0) {
         e.preventDefault();
         const t1 = e.touches[0];
         const t2 = e.touches[1];
@@ -173,8 +187,16 @@ export default function SlotLayoutEditor({
       }
     };
 
-    const handleTouchEnd = () => {
-      touchStartDist.current = 0;
+    const handleTouchEnd = (e: TouchEvent) => {
+      if (e.touches.length < 2) {
+        touchStartDist.current = 0;
+        
+        // Gunakan delay pendek agar event pointerup dari sisa jari yang terangkat
+        // tidak secara tak sengaja memicu klik baru di kanvas
+        setTimeout(() => {
+          isMultiTouch.current = false;
+        }, 100);
+      }
     };
 
     scrollContainer.addEventListener("wheel", handleWheel, { passive: false });
@@ -191,6 +213,7 @@ export default function SlotLayoutEditor({
       scrollContainer.removeEventListener("touchcancel", handleTouchEnd);
     };
   }, []);
+  
   const [localOverlayZ, setLocalOverlayZ] = useState(slots.length);
   const activeOverlayZ = overlayZIndex ?? localOverlayZ;
 
@@ -265,7 +288,7 @@ export default function SlotLayoutEditor({
     }
   }, [applyHistoryState]);
 
-  // Keyboard Shortcuts (Ctrl+Z / Cmd+Z)
+  // Keyboard Shortcuts (Ctrl+Z / Cmd+Z, Escape to Unselect)
   const canUndoRef = useRef(canUndo);
   const canRedoRef = useRef(canRedo);
   canUndoRef.current = canUndo;
@@ -286,6 +309,10 @@ export default function SlotLayoutEditor({
       } else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'y') {
         e.preventDefault();
         if (canRedoRef.current) handleRedo();
+      } else if (e.key === 'Escape') {
+        // Shortcut membatalkan pilihan objek
+        setActiveId(null);
+        setEditTarget("slots"); 
       }
     };
     window.addEventListener('keydown', handleKeyDown);
@@ -399,6 +426,7 @@ export default function SlotLayoutEditor({
   );
 
   const onSlotDown = (e: React.PointerEvent, slotId: string) => {
+    if (isMultiTouch.current || !e.isPrimary) return; // Lindungi dari intervensi jari ke-2
     e.stopPropagation();
     e.preventDefault();
     setActiveId(slotId);
@@ -412,6 +440,7 @@ export default function SlotLayoutEditor({
   };
 
   const onHandleDown = (e: React.PointerEvent, slotId: string, op: "resize" | "rotate", handle?: string) => {
+    if (isMultiTouch.current || !e.isPrimary) return;
     e.preventDefault(); e.stopPropagation();
     const rect = containerRef.current!.getBoundingClientRect();
     const slot = slots.find(s => s.id === slotId)!;
@@ -429,6 +458,7 @@ export default function SlotLayoutEditor({
   };
 
   const onOverlayDown = (e: React.PointerEvent) => {
+    if (isMultiTouch.current || !e.isPrimary) return;
     e.stopPropagation(); e.preventDefault();
     const rect = containerRef.current!.getBoundingClientRect();
     const clickXPct = ((e.clientX - rect.left) / rect.width) * 100;
@@ -453,6 +483,7 @@ export default function SlotLayoutEditor({
   };
 
   const onContainerDown = (e: React.PointerEvent) => {
+    if (isMultiTouch.current || !e.isPrimary) return;
     const rect = containerRef.current!.getBoundingClientRect();
     const clickXPct = ((e.clientX - rect.left) / rect.width) * 100;
     const clickYPct = ((e.clientY - rect.top) / rect.height) * 100;
@@ -492,6 +523,7 @@ export default function SlotLayoutEditor({
   };
 
   const onHandleDownOverlay = (e: React.PointerEvent, hType: "rotate" | "nw" | "ne" | "sw" | "se") => {
+    if (isMultiTouch.current || !e.isPrimary) return;
     e.preventDefault(); e.stopPropagation();
     const rect = containerRef.current!.getBoundingClientRect();
     if (hType === "rotate") {
@@ -505,6 +537,7 @@ export default function SlotLayoutEditor({
   };
 
   const onMove = (e: React.PointerEvent) => {
+    if (isMultiTouch.current || !e.isPrimary) return; // Cegah pergerakan jika dalam mode zoom
     const d = drag.current;
     if (!d) return;
     const rect = containerRef.current!.getBoundingClientRect();
@@ -894,6 +927,14 @@ export default function SlotLayoutEditor({
           <div 
             ref={scrollContainerRef}
             className="flex-1 overflow-auto w-full h-full custom-scrollbar"
+            // FITUR BARU: Klik area kosong di luar kanvas untuk membatalkan pilihan
+            onPointerDown={(e) => {
+              if (isMultiTouch.current || !e.isPrimary) return;
+              if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+                setActiveId(null);
+                setEditTarget("slots");
+              }
+            }}
           >
             <div className="min-w-full min-h-full flex items-center justify-center p-8">
               
@@ -919,11 +960,11 @@ export default function SlotLayoutEditor({
                 >
                 <div
                   ref={containerRef}
-                  className="relative overflow-visible border border-zinc-300 dark:border-zinc-700/80 select-none shadow-sm w-full h-full bg-checkered"
+                  className="relative overflow-hidden border border-zinc-300 dark:border-zinc-700/80 select-none shadow-sm w-full h-full bg-checkered" // Perubahan: overflow-hidden
                   style={{
                     containerType: "inline-size", 
                     touchAction: "none",
-                    borderRadius: overlay ? "0px" : "12px", 
+                    borderRadius: 0, // Perubahan: Corner Radius 0px (sudut tajam)
                   }}
                   onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onUp}
                   onPointerDown={onContainerDown}
@@ -963,7 +1004,7 @@ export default function SlotLayoutEditor({
                           boxSizing: "border-box", overflow: "visible", borderRadius: overlay ? 0 : 2,
                           touchAction: "none",
                           
-                          border: isActive ? "2px dashed #60a5fa" : "1px solid #3f3f46",
+                          border: isActive ? "1px dashed #60a5fa" : "1px solid #3f3f46",
                           background: isActive ? "#1e3a8a" : "#27272a", 
                           
                           cursor: editTarget === "slots" ? (isActive ? "move" : "pointer") : "default",
@@ -1020,7 +1061,7 @@ export default function SlotLayoutEditor({
                         position: "absolute", left: `${overlayX}%`, top: `${overlayY}%`, width: `${overlayW}%`, height: `${overlayH}%`,
                         transform: `rotate(${overlayRotation}deg)`, transformOrigin: "center", zIndex: activeOverlayZ + 10,
                         boxSizing: "border-box", cursor: editTarget === "overlay" ? "move" : "default", pointerEvents: editTarget === "overlay" ? "auto" : "none",
-                        border: editTarget === "overlay" ? "2px dashed #3b82f6" : "none",
+                        border: editTarget === "overlay" ? "1px dashed #3b82f6" : "none",
                         touchAction: "none",
                       }}
                       onPointerDown={editTarget === "overlay" ? onOverlayDown : undefined}

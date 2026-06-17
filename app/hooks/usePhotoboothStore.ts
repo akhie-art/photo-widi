@@ -80,6 +80,8 @@ export interface EventConfig {
   countdownDuration: number;
   allowedFilters: string[];
   allowedLayouts: string[];
+  allowedPresets?: string[];
+  allowedStickers?: string[];
   mirrorDefault: boolean;
   customFilters: FilterAsset[];
   customStickers: StickerAsset[];
@@ -114,6 +116,8 @@ const DEFAULT_CONFIG: EventConfig = {
   countdownDuration: 3,
   allowedFilters: ["original"],
   allowedLayouts: ["strip"],
+  allowedPresets: [],
+  allowedStickers: [],
   mirrorDefault: true,
   customFilters: [],
   customStickers: [],
@@ -195,6 +199,8 @@ function migrateConfig(parsed: EventConfig): { config: EventConfig; changed: boo
   if (parsed.mirrorDefault === undefined) { parsed.mirrorDefault = true; changed = true; }
   if (parsed.allowedFilters === undefined) { parsed.allowedFilters = ["original"]; changed = true; }
   if (parsed.allowedLayouts === undefined) { parsed.allowedLayouts = ["strip"]; changed = true; }
+  if (parsed.allowedPresets === undefined) { parsed.allowedPresets = []; changed = true; }
+  if (parsed.allowedStickers === undefined) { parsed.allowedStickers = []; changed = true; }
 
   return { config: parsed, changed };
 }
@@ -354,12 +360,12 @@ async function uploadStickerToStorage(imageData: string, stickerId: string): Pro
 }
 
 /**
- * Hapus aset event (logo / qris) dari storage bucket 'event-assets' berdasarkan jenis aset.
+ * Hapus aset konfigurasi booth (logo / qris) dari storage bucket 'booth-config' berdasarkan jenis aset.
  */
 async function deleteEventAssetFromStorage(prefix: "logo" | "qris"): Promise<void> {
   try {
     const { data, error } = await supabase.storage
-      .from("event-assets")
+      .from("booth-config")
       .list("");
       
     if (error || !data) return;
@@ -370,7 +376,7 @@ async function deleteEventAssetFromStorage(prefix: "logo" | "qris"): Promise<voi
       .map(f => f.name);
       
     if (filesToDelete.length > 0) {
-      await supabase.storage.from("event-assets").remove(filesToDelete);
+      await supabase.storage.from("booth-config").remove(filesToDelete);
     }
   } catch (err) {
     console.error(`Gagal menghapus ${prefix} lama dari storage:`, err);
@@ -378,7 +384,8 @@ async function deleteEventAssetFromStorage(prefix: "logo" | "qris"): Promise<voi
 }
 
 /**
- * Upload logo atau QRIS ke bucket 'event-assets'.
+ * Upload logo atau QRIS ke bucket 'booth-config'.
+ * Dipakai oleh konfigurasi utama booth (event_config), terpisah dari per-event.
  * Menerima base64 data URL.
  * Mengembalikan public URL dari bucket.
  */
@@ -393,7 +400,7 @@ async function uploadEventAssetToStorage(imageData: string, prefix: "logo" | "qr
   const path = `${prefix}_${Date.now()}.${ext}`;
 
   const { error } = await supabase.storage
-    .from("event-assets")
+    .from("booth-config")
     .upload(path, blob, {
       contentType: blob.type || "image/png",
       upsert: true,
@@ -402,7 +409,7 @@ async function uploadEventAssetToStorage(imageData: string, prefix: "logo" | "qr
   if (error) throw error;
 
   const { data: urlData } = supabase.storage
-    .from("event-assets")
+    .from("booth-config")
     .getPublicUrl(path);
 
   return urlData.publicUrl;
@@ -720,7 +727,7 @@ export function usePhotoboothStore() {
         hasChanges = true;
       } catch (err) {
         console.error("[Storage] Gagal mengunggah logo:", err);
-        toast.error("Gagal mengunggah logo ke storage bucket 'event-assets'.");
+        toast.error("Gagal mengunggah logo ke storage bucket 'booth-config'.");
         return false;
       }
     } else if (newConfig.logoUrl === "" || newConfig.logoUrl === undefined || newConfig.logoUrl === null) {
@@ -735,7 +742,7 @@ export function usePhotoboothStore() {
         hasChanges = true;
       } catch (err) {
         console.error("[Storage] Gagal mengunggah QRIS:", err);
-        toast.error("Gagal mengunggah barcode QRIS ke storage bucket 'event-assets'.");
+        toast.error("Gagal mengunggah barcode QRIS ke storage bucket 'booth-config'.");
         return false;
       }
     } else if (newConfig.qrisUrl === "" || newConfig.qrisUrl === undefined || newConfig.qrisUrl === null) {
@@ -856,6 +863,7 @@ export function usePhotoboothStore() {
         timestamp: newPhoto.timestamp,
         payment_method: metadata?.paymentMethod ?? null,
         amount: metadata?.amount ?? null,
+        event_name: config.eventName || null,
       };
 
       if (finalCapturedPhotos.length > 0) {

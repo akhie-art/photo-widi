@@ -540,7 +540,12 @@ export default function SessionSetupScreen({
 }: SessionSetupScreenProps) {
   const [activeTab, setActiveTab] = useState<"preset" | "filter">("preset");
 
-  const presets = config.presetTemplates || [];
+  const presets = (config.presetTemplates || []).filter((p) => {
+    if (!config.allowedPresets || config.allowedPresets.length === 0) {
+      return true;
+    }
+    return config.allowedPresets.includes(p.id);
+  });
   const selectedPreset   = presets.find(p => p.id === selectedPresetId);
   const selectedFilter   = availableFilters.find(f => f.id === selectedFilterId);
 

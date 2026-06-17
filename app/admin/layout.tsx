@@ -16,6 +16,7 @@ import {
   Moon,
   History,
   Users,
+  Calendar,
 } from "lucide-react";
 
 import {
@@ -183,9 +184,6 @@ export default function AdminLayout({
 
             <SidebarContent className="p-3 group-data-[state=collapsed]:p-2 gap-3 bg-sidebar transition-all duration-200">
               <SidebarGroup className="group-data-[state=collapsed]:p-0">
-                <SidebarGroupLabel className="text-[10px] text-zinc-500 font-mono tracking-wider px-2 mb-1 group-data-[state=collapsed]:hidden">
-                  NAVIGASI UTAMA
-                </SidebarGroupLabel>
                 <SidebarGroupContent>
                   <SidebarMenu className="gap-1">
                     <SidebarMenuItem>
@@ -201,6 +199,22 @@ export default function AdminLayout({
                       >
                         <LayoutDashboard className="w-4 h-4 shrink-0" strokeWidth={1.5} />
                         <span className="group-data-[state=collapsed]:hidden">Dashboard</span>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+
+                    <SidebarMenuItem>
+                      <SidebarMenuButton
+                        render={<Link href="/admin/events" />}
+                        isActive={activeTab === "events"}
+                        tooltip="Manajemen Event"
+                        className={`w-full justify-start group-data-[state=collapsed]:justify-center gap-3 group-data-[state=collapsed]:gap-0 px-3 group-data-[state=collapsed]:px-2 py-2 rounded-lg text-xs transition-all border ${
+                          activeTab === "events"
+                            ? "bg-sidebar-accent border-sidebar-border text-foreground font-medium"
+                            : "bg-transparent border-transparent hover:bg-sidebar-accent/50 text-muted-foreground hover:text-foreground"
+                        }`}
+                      >
+                        <Calendar className="w-4 h-4 shrink-0" strokeWidth={1.5} />
+                        <span className="group-data-[state=collapsed]:hidden">Manajemen Event</span>
                       </SidebarMenuButton>
                     </SidebarMenuItem>
 
