@@ -24,6 +24,7 @@ export interface FrameTemplate {
   overlayW?: number;
   overlayH?: number;
   overlayRotation?: number;
+  paperSize?: "2R" | "4R";
 }
 
 export interface LayoutAsset {
@@ -42,7 +43,7 @@ export interface FilterAsset {
 export interface StickerAsset {
   id: string;
   name: string;
-  imageUrl: string; // emoji or data url/image path
+  imageUrl: string; // emoji teks, atau public URL dari bucket 'sticker-assets'
 }
 
 export interface PlacedSticker {
@@ -57,7 +58,7 @@ export interface PlacedSticker {
 export interface PresetTemplate {
   id: string;
   name: string;
-  imageOverlay?: string;  // PNG overlay (base64 data URL)
+  imageOverlay?: string;  // PNG overlay — public URL from 'preset-overlays' storage bucket
   customSlots?: SlotConfig[];
   overlayX?: number;      // overlay X position (%) — 0 = left edge
   overlayY?: number;      // overlay Y position (%) — 0 = top edge
@@ -65,6 +66,7 @@ export interface PresetTemplate {
   overlayH?: number;      // overlay height (%) — 100 = full canvas height
   overlayRotation?: number; // overlay rotation in degrees
   forceLayout: boolean;   // jika true, pilihan layout manual dikunci/diabaikan
+  paperSize?: "2R" | "4R"; // ukuran kertas: "2R" (591x1772) atau "4R" (1205x1795)
 }
 
 
@@ -135,6 +137,7 @@ function lsGetConfig(): EventConfig | null {
 function lsSetConfig(cfg: EventConfig) {
   if (typeof window === "undefined") return;
   try {
+    // imageOverlay dan sticker imageUrl kini menyimpan URL pendek dari bucket — tidak perlu strip.
     sessionStorage.setItem("glow_booth_config", JSON.stringify(cfg));
   } catch (err) {
     console.warn("[Storage] Failed to save config to sessionStorage:", err);
@@ -153,17 +156,21 @@ function lsSetPhotos(photos: PhotoStrip[]) {
   if (typeof window === "undefined") return;
   try {
     // Hanya simpan 10 foto terbaru di sessionStorage untuk mencegah QuotaExceededError
-    const cleanPhotos = photos.slice(0, 10).map((p, idx) => ({
-      id: p.id,
-      timestamp: p.timestamp,
-      customerName: p.customerName,
-      customerPhone: p.customerPhone,
-      sessionsCount: p.sessionsCount,
-      operatorName: p.operatorName,
-      paymentMethod: p.paymentMethod,
-      amount: p.amount,
-      dataUrl: idx < 2 ? p.dataUrl : "",
-    }));
+    const cleanPhotos = photos.slice(0, 10).map((p, idx) => {
+      // Hindari menyimpan string base64 yang sangat besar di sessionStorage
+      const isBase64 = p.dataUrl?.startsWith("data:");
+      return {
+        id: p.id,
+        timestamp: p.timestamp,
+        customerName: p.customerName,
+        customerPhone: p.customerPhone,
+        sessionsCount: p.sessionsCount,
+        operatorName: p.operatorName,
+        paymentMethod: p.paymentMethod,
+        amount: p.amount,
+        dataUrl: idx < 2 && !isBase64 ? p.dataUrl : "",
+      };
+    });
 
     sessionStorage.setItem("glow_booth_photos", JSON.stringify(cleanPhotos));
   } catch (err) {
@@ -179,11 +186,15 @@ function lsSetPhotos(photos: PhotoStrip[]) {
 function migrateConfig(parsed: EventConfig): { config: EventConfig; changed: boolean } {
   let changed = false;
 
-  // Ensure all array fields exist (initialize to empty if missing)
+  // Pastikan field inisialisasi lokal terisi lengkap meskipun absen dari JSON database
   if (!parsed.customFilters) { parsed.customFilters = []; changed = true; }
   if (!parsed.customStickers) { parsed.customStickers = []; changed = true; }
   if (!parsed.presetTemplates) { parsed.presetTemplates = []; changed = true; }
   if (parsed.activePresetTemplateId === undefined) { parsed.activePresetTemplateId = ""; changed = true; }
+  if (parsed.countdownDuration === undefined) { parsed.countdownDuration = 3; changed = true; }
+  if (parsed.mirrorDefault === undefined) { parsed.mirrorDefault = true; changed = true; }
+  if (parsed.allowedFilters === undefined) { parsed.allowedFilters = ["original"]; changed = true; }
+  if (parsed.allowedLayouts === undefined) { parsed.allowedLayouts = ["strip"]; changed = true; }
 
   return { config: parsed, changed };
 }
@@ -195,7 +206,7 @@ async function base64ToBlob(base64: string, defaultContentType = "image/png"): P
   try {
     const res = await fetch(base64);
     return await res.blob();
-  } catch (err) {
+  } catch {
     const parts = base64.split(";base64,");
     const contentType = parts[0].split(":")[1] || defaultContentType;
     const raw = window.atob(parts[1]);
@@ -208,6 +219,7 @@ async function base64ToBlob(base64: string, defaultContentType = "image/png"): P
   }
 }
 
+/** Upload foto strip / raw photo ke bucket 'photostrips' */
 async function uploadImageToStorage(base64: string, path: string): Promise<string> {
   const blob = await base64ToBlob(base64);
   const { error } = await supabase.storage
@@ -221,6 +233,176 @@ async function uploadImageToStorage(base64: string, path: string): Promise<strin
 
   const { data: urlData } = supabase.storage
     .from("photostrips")
+    .getPublicUrl(path);
+
+  return urlData.publicUrl;
+}
+
+/**
+ * Hapus file overlay dari bucket 'preset-overlays' berdasarkan presetId.
+ * Dipanggil saat overlay dihapus, preset dihapus, atau sebelum diganti dengan overlay baru.
+ */
+async function deleteOverlayFromStorage(presetId: string): Promise<void> {
+  try {
+    const { data, error } = await supabase.storage
+      .from("preset-overlays")
+      .list("overlays");
+      
+    if (error || !data) return;
+    
+    // Cari semua file yang diawali dengan presetId (misal preset_123_1718.png atau preset_123.png)
+    const filesToDelete = data
+      .filter(f => f.name.startsWith(presetId))
+      .map(f => `overlays/${f.name}`);
+      
+    if (filesToDelete.length > 0) {
+      await supabase.storage.from("preset-overlays").remove(filesToDelete);
+    }
+  } catch (err) {
+    console.error("Gagal menghapus overlay lama dari storage:", err);
+  }
+}
+
+/**
+ * Upload gambar overlay preset ke bucket 'preset-overlays'.
+ * Menerima base64 data URL atau URL publik yang sudah ada.
+ * Mengembalikan public URL dari bucket.
+ */
+async function uploadOverlayToStorage(imageData: string, presetId: string): Promise<string> {
+  // Jika sudah berupa URL (bukan base64), kembalikan langsung — tidak perlu re-upload
+  if (!imageData.startsWith("data:")) return imageData;
+
+  // Hapus overlay lama terlebih dahulu agar storage bersih dan cache ter-bust
+  await deleteOverlayFromStorage(presetId).catch(() => {});
+
+  const blob = await base64ToBlob(imageData);
+  const ext = blob.type === "image/jpeg" ? "jpg" : "png";
+  // Gunakan timestamp untuk cache busting di level browser
+  const path = `overlays/${presetId}_${Date.now()}.${ext}`;
+
+  const { error } = await supabase.storage
+    .from("preset-overlays")
+    .upload(path, blob, {
+      contentType: blob.type || "image/png",
+      upsert: true,
+    });
+
+  if (error) throw error;
+
+  const { data: urlData } = supabase.storage
+    .from("preset-overlays")
+    .getPublicUrl(path);
+
+  return urlData.publicUrl;
+}
+
+/**
+ * Hapus file stiker dari bucket 'sticker-assets' berdasarkan stickerId.
+ * Dipanggil saat stiker dihapus atau sebelum diganti dengan stiker baru.
+ */
+async function deleteStickerFromStorage(stickerId: string): Promise<void> {
+  try {
+    const { data, error } = await supabase.storage
+      .from("sticker-assets")
+      .list("stickers");
+      
+    if (error || !data) return;
+    
+    // Cari semua file yang diawali dengan stickerId
+    const filesToDelete = data
+      .filter(f => f.name.startsWith(stickerId))
+      .map(f => `stickers/${f.name}`);
+      
+    if (filesToDelete.length > 0) {
+      await supabase.storage.from("sticker-assets").remove(filesToDelete);
+    }
+  } catch (err) {
+    console.error("Gagal menghapus stiker lama dari storage:", err);
+  }
+}
+
+/**
+ * Upload gambar stiker PNG ke bucket 'sticker-assets'.
+ * Hanya dipakai jika imageUrl adalah base64 (bukan teks emoji).
+ * Mengembalikan public URL dari bucket.
+ */
+async function uploadStickerToStorage(imageData: string, stickerId: string): Promise<string> {
+  // Jika sudah berupa URL atau teks emoji (bukan base64), kembalikan langsung
+  if (!imageData.startsWith("data:")) return imageData;
+
+  // Hapus stiker lama terlebih dahulu jika ada
+  await deleteStickerFromStorage(stickerId).catch(() => {});
+
+  const blob = await base64ToBlob(imageData, "image/png");
+  // Gunakan timestamp untuk cache busting di level browser
+  const path = `stickers/${stickerId}_${Date.now()}.png`;
+
+  const { error } = await supabase.storage
+    .from("sticker-assets")
+    .upload(path, blob, {
+      contentType: "image/png",
+      upsert: true,
+    });
+
+  if (error) throw error;
+
+  const { data: urlData } = supabase.storage
+    .from("sticker-assets")
+    .getPublicUrl(path);
+
+  return urlData.publicUrl;
+}
+
+/**
+ * Hapus aset event (logo / qris) dari storage bucket 'event-assets' berdasarkan jenis aset.
+ */
+async function deleteEventAssetFromStorage(prefix: "logo" | "qris"): Promise<void> {
+  try {
+    const { data, error } = await supabase.storage
+      .from("event-assets")
+      .list("");
+      
+    if (error || !data) return;
+    
+    // Cari semua file yang diawali dengan prefix (misal logo_123.png)
+    const filesToDelete = data
+      .filter(f => f.name.startsWith(prefix))
+      .map(f => f.name);
+      
+    if (filesToDelete.length > 0) {
+      await supabase.storage.from("event-assets").remove(filesToDelete);
+    }
+  } catch (err) {
+    console.error(`Gagal menghapus ${prefix} lama dari storage:`, err);
+  }
+}
+
+/**
+ * Upload logo atau QRIS ke bucket 'event-assets'.
+ * Menerima base64 data URL.
+ * Mengembalikan public URL dari bucket.
+ */
+async function uploadEventAssetToStorage(imageData: string, prefix: "logo" | "qris"): Promise<string> {
+  if (!imageData.startsWith("data:")) return imageData;
+
+  // Hapus aset lama sejenis agar storage bersih dan cache ter-bust
+  await deleteEventAssetFromStorage(prefix).catch(() => {});
+
+  const blob = await base64ToBlob(imageData);
+  const ext = blob.type === "image/jpeg" ? "jpg" : "png";
+  const path = `${prefix}_${Date.now()}.${ext}`;
+
+  const { error } = await supabase.storage
+    .from("event-assets")
+    .upload(path, blob, {
+      contentType: blob.type || "image/png",
+      upsert: true,
+    });
+
+  if (error) throw error;
+
+  const { data: urlData } = supabase.storage
+    .from("event-assets")
     .getPublicUrl(path);
 
   return urlData.publicUrl;
@@ -275,10 +457,9 @@ export function usePhotoboothStore() {
         if (cfgRow && cfgRow.config_json) {
           baseConfig = cfgRow.config_json as EventConfig;
         } else {
-          const localCfg = lsGetConfig();
-          if (localCfg) {
-            baseConfig = localCfg;
-          }
+          // Jika database kosong (data dihapus/belum diinisialisasi), jangan gunakan data cache lokal
+          // agar data lama tidak ter-restore secara otomatis ke database. Gunakan DEFAULT_CONFIG.
+          baseConfig = DEFAULT_CONFIG;
         }
 
         const { config: migrated } = migrateConfig(baseConfig);
@@ -299,9 +480,9 @@ export function usePhotoboothStore() {
           }));
         }
         if (presetsRows) {
-          migrated.presetTemplates = presetsRows.map(r => ({
+          migrated.presetTemplates = presetsRows.map((r, index) => ({
             id: r.id,
-            name: r.name,
+            name: (r as any).name || "",
             imageOverlay: r.image_overlay || undefined,
             customSlots: r.custom_slots || undefined,
             overlayX: r.overlay_x !== null && r.overlay_x !== undefined ? Number(r.overlay_x) : undefined,
@@ -310,6 +491,7 @@ export function usePhotoboothStore() {
             overlayH: r.overlay_h !== null && r.overlay_h !== undefined ? Number(r.overlay_h) : undefined,
             overlayRotation: r.overlay_rotation !== null && r.overlay_rotation !== undefined ? Number(r.overlay_rotation) : undefined,
             forceLayout: r.force_layout ?? true,
+            paperSize: r.paper_size || "2R",
           }));
         }
 
@@ -387,6 +569,7 @@ export function usePhotoboothStore() {
           overlayH: r.overlay_h != null ? Number(r.overlay_h) : undefined,
           overlayRotation: r.overlay_rotation != null ? Number(r.overlay_rotation) : undefined,
           forceLayout: r.force_layout ?? true,
+          paperSize: r.paper_size || "2R",
         };
         setConfig((prev) => {
           if (prev.presetTemplates?.find(p => p.id === newPreset.id)) return prev;
@@ -412,6 +595,7 @@ export function usePhotoboothStore() {
                 overlayH: r.overlay_h != null ? Number(r.overlay_h) : undefined,
                 overlayRotation: r.overlay_rotation != null ? Number(r.overlay_rotation) : undefined,
                 forceLayout: r.force_layout ?? true,
+                paperSize: r.paper_size || "2R",
               } : p
             ),
           };
@@ -524,31 +708,95 @@ export function usePhotoboothStore() {
     };
   }, []);
 
-  // ── Update Config (Supabase + localStorage) ───────────────────────────────
-  const saveConfig = useCallback(async (newConfig: EventConfig) => {
-    setConfig(newConfig);
-    lsSetConfig(newConfig);
+  const saveConfig = useCallback(async (newConfig: EventConfig): Promise<boolean> => {
+    let finalLogoUrl = newConfig.logoUrl;
+    let finalQrisUrl = newConfig.qrisUrl;
+    let hasChanges = false;
+
+    // 1. Upload logo jika base64
+    if (newConfig.logoUrl && newConfig.logoUrl.startsWith("data:")) {
+      try {
+        finalLogoUrl = await uploadEventAssetToStorage(newConfig.logoUrl, "logo");
+        hasChanges = true;
+      } catch (err) {
+        console.error("[Storage] Gagal mengunggah logo:", err);
+        toast.error("Gagal mengunggah logo ke storage bucket 'event-assets'.");
+        return false;
+      }
+    } else if (newConfig.logoUrl === "" || newConfig.logoUrl === undefined || newConfig.logoUrl === null) {
+      // Hapus jika dikosongkan
+      await deleteEventAssetFromStorage("logo").catch(() => {});
+    }
+
+    // 2. Upload QRIS jika base64
+    if (newConfig.qrisUrl && newConfig.qrisUrl.startsWith("data:")) {
+      try {
+        finalQrisUrl = await uploadEventAssetToStorage(newConfig.qrisUrl, "qris");
+        hasChanges = true;
+      } catch (err) {
+        console.error("[Storage] Gagal mengunggah QRIS:", err);
+        toast.error("Gagal mengunggah barcode QRIS ke storage bucket 'event-assets'.");
+        return false;
+      }
+    } else if (newConfig.qrisUrl === "" || newConfig.qrisUrl === undefined || newConfig.qrisUrl === null) {
+      // Hapus jika dikosongkan
+      await deleteEventAssetFromStorage("qris").catch(() => {});
+    }
+
+    const updatedConfig = {
+      ...newConfig,
+      logoUrl: finalLogoUrl,
+      qrisUrl: finalQrisUrl,
+    };
+
+    if (hasChanges) {
+      setConfig(updatedConfig);
+      lsSetConfig(updatedConfig);
+    }
+
     try {
+      // Hanya simpan field-field penting ke config_json di database Supabase
+      // agar kolom database tetap bersih dari key-key tidak terpakai
       const metadataOnly = {
-        ...newConfig,
-        customFilters: [],
-        customStickers: [],
-        presetTemplates: [],
+        eventName: updatedConfig.eventName,
+        pricePerSession: updatedConfig.pricePerSession,
+        logoUrl: updatedConfig.logoUrl,
+        qrisUrl: updatedConfig.qrisUrl,
+        date: updatedConfig.date,
+        time: updatedConfig.time,
       };
-      await supabase
+      const { error } = await supabase
         .from("event_config")
         .upsert({ id: "default", config_json: metadataOnly, updated_at: new Date().toISOString() });
-    } catch (err) {
+      
+      if (error) {
+        console.error("[Supabase] saveConfig DB error:", error);
+        toast.error(`Gagal menyimpan konfigurasi ke database: ${error.message}`);
+        return false;
+      }
+      return true;
+    } catch (err: any) {
       console.error("[Supabase] saveConfig error:", err);
+      toast.error(`Terjadi kesalahan saat menyimpan pengaturan: ${err.message || err}`);
+      return false;
     }
   }, []);
 
-  const updateConfig = useCallback((fields: Partial<EventConfig>) => {
-    setConfig((prev) => {
-      const updated = { ...prev, ...fields };
-      setTimeout(() => saveConfig(updated), 0);
-      return updated;
-    });
+  const updateConfig = useCallback(async (fields: Partial<EventConfig>): Promise<boolean> => {
+    try {
+      let updatedConfig: EventConfig = DEFAULT_CONFIG;
+      setConfig((prev) => {
+        updatedConfig = { ...prev, ...fields };
+        return updatedConfig;
+      });
+      
+      // Tunggu hingga penyimpanan Supabase dan upload storage selesai
+      const success = await saveConfig(updatedConfig);
+      return success;
+    } catch (err) {
+      console.error(err);
+      return false;
+    }
   }, [saveConfig]);
 
   // ── Frame CRUD ────────────────────────────────────────────────────────────
@@ -628,6 +876,18 @@ export function usePhotoboothStore() {
           console.error("[Supabase] addPhoto error:", error);
         }
       }
+
+      // Update state lokal dan storage dengan URL final dari Supabase Storage
+      setPhotos((prev) => {
+        const updated = prev.map((p) =>
+          p.id === newId
+            ? { ...p, dataUrl: finalDataUrl, capturedPhotos: finalCapturedPhotos }
+            : p
+        );
+        setTimeout(() => lsSetPhotos(updated), 0);
+        return updated;
+      });
+
     } catch (err) {
       console.error("[Supabase] addPhoto error:", err);
     }
@@ -694,21 +954,54 @@ export function usePhotoboothStore() {
     }
   }, []);
 
-  const addStickerAsset = useCallback(async (sticker: Omit<StickerAsset, "id">) => {
-    const newSticker: StickerAsset = { ...sticker, id: "sticker_" + Date.now() };
-    setConfig((prev) => {
-      const updated = { ...prev, customStickers: [...(prev.customStickers || []), newSticker] };
-      setTimeout(() => lsSetConfig(updated), 0);
-      return updated;
-    });
+  const addStickerAsset = useCallback(async (sticker: Omit<StickerAsset, "id">): Promise<boolean> => {
+    const newStickerId = "sticker_" + Date.now();
+    let finalImageUrl = sticker.imageUrl;
+
     try {
-      await supabase.from("sticker_assets").insert({
-        id: newSticker.id,
-        name: newSticker.name,
-        image_url: newSticker.imageUrl,
+      // 1. Upload ke bucket terlebih dahulu jika base64
+      if (sticker.imageUrl.startsWith("data:")) {
+        try {
+          finalImageUrl = await uploadStickerToStorage(sticker.imageUrl, newStickerId);
+        } catch (uploadErr: any) {
+          console.error("[Storage] Gagal upload stiker:", uploadErr);
+          toast.error("Gagal mengunggah stiker. Harap pastikan storage bucket 'sticker-assets' sudah dibuat di Supabase Dashboard (SQL Editor) dengan RLS policy yang sesuai.");
+          return false;
+        }
+      }
+
+      // 2. Insert ke database
+      const { error: dbErr } = await supabase.from("sticker_assets").insert({
+        id: newStickerId,
+        name: sticker.name,
+        image_url: finalImageUrl,
       });
-    } catch (err) {
+
+      if (dbErr) {
+        console.error("[Supabase] Gagal menyimpan stiker ke database:", dbErr);
+        toast.error(`Gagal menyimpan stiker: ${dbErr.message}`);
+        return false;
+      }
+
+      // 3. Update state lokal setelah sukses
+      const newSticker: StickerAsset = {
+        id: newStickerId,
+        name: sticker.name,
+        imageUrl: finalImageUrl,
+      };
+
+      setConfig((prev) => {
+        if (prev.customStickers?.find(s => s.id === newSticker.id)) return prev;
+        const updated = { ...prev, customStickers: [...(prev.customStickers || []), newSticker] };
+        setTimeout(() => lsSetConfig(updated), 0);
+        return updated;
+      });
+
+      return true;
+    } catch (err: any) {
       console.error("[Supabase] addStickerAsset error:", err);
+      toast.error(`Terjadi kesalahan: ${err.message || err}`);
+      return false;
     }
   }, []);
 
@@ -719,48 +1012,103 @@ export function usePhotoboothStore() {
       return updated;
     });
     try {
+      // Hapus file dari bucket jika ada (emoji teks tidak punya file di bucket)
+      deleteStickerFromStorage(id).catch(() => {});
       await supabase.from("sticker_assets").delete().eq("id", id);
     } catch (err) {
       console.error("[Supabase] deleteStickerAsset error:", err);
     }
   }, []);
 
-  const addPresetTemplate = useCallback(async (preset: Omit<PresetTemplate, "id">) => {
-    const newPreset: PresetTemplate = { ...preset, id: "preset_" + Date.now() };
-    setConfig((prev) => {
-      const updated = { ...prev, presetTemplates: [...(prev.presetTemplates || []), newPreset] };
-      setTimeout(() => lsSetConfig(updated), 0);
-      return updated;
-    });
+  const addPresetTemplate = useCallback(async (preset: Omit<PresetTemplate, "id">): Promise<boolean> => {
+    const newPresetId = "preset_" + Date.now();
+    let overlayUrl: string | null = null;
+
     try {
-      await supabase.from("preset_templates").insert({
-        id: newPreset.id,
-        name: newPreset.name,
-        image_overlay: newPreset.imageOverlay || null,
-        custom_slots: newPreset.customSlots || null,
-        overlay_x: newPreset.overlayX ?? 0,
-        overlay_y: newPreset.overlayY ?? 0,
-        overlay_w: newPreset.overlayW ?? 100,
-        overlay_h: newPreset.overlayH ?? 100,
-        overlay_rotation: newPreset.overlayRotation ?? 0,
-        force_layout: newPreset.forceLayout,
+      // 1. Upload ke bucket terlebih dahulu jika ada overlay base64
+      if (preset.imageOverlay && preset.imageOverlay.startsWith("data:")) {
+        try {
+          overlayUrl = await uploadOverlayToStorage(preset.imageOverlay, newPresetId);
+        } catch (uploadErr: any) {
+          console.error("[Storage] Gagal upload overlay:", uploadErr);
+          toast.error("Gagal mengunggah gambar overlay. Harap pastikan storage bucket 'preset-overlays' sudah dibuat di Supabase Dashboard (SQL Editor) dengan RLS policy yang sesuai.");
+          return false;
+        }
+      } else if (preset.imageOverlay) {
+        overlayUrl = preset.imageOverlay;
+      }
+
+      // 2. Insert ke database
+      const { error: dbErr } = await supabase.from("preset_templates").insert({
+        id: newPresetId,
+        image_overlay: overlayUrl,
+        custom_slots: preset.customSlots || null,
+        overlay_x: preset.overlayX ?? 0,
+        overlay_y: preset.overlayY ?? 0,
+        overlay_w: preset.overlayW ?? 100,
+        overlay_h: preset.overlayH ?? 100,
+        overlay_rotation: preset.overlayRotation ?? 0,
+        force_layout: preset.forceLayout,
+        paper_size: preset.paperSize || "2R",
       });
-    } catch (err) {
+
+      if (dbErr) {
+        console.error("[Supabase] Gagal menyimpan preset template ke database:", dbErr);
+        toast.error(`Gagal menyimpan template: ${dbErr.message}`);
+        return false;
+      }
+
+      // 3. Update state lokal setelah sukses
+      const newPreset: PresetTemplate = {
+        id: newPresetId,
+        name: preset.name,
+        imageOverlay: overlayUrl ?? undefined,
+        customSlots: preset.customSlots,
+        overlayX: preset.overlayX,
+        overlayY: preset.overlayY,
+        overlayW: preset.overlayW,
+        overlayH: preset.overlayH,
+        overlayRotation: preset.overlayRotation,
+        forceLayout: preset.forceLayout,
+        paperSize: preset.paperSize || "2R",
+      };
+
+      setConfig((prev) => {
+        if (prev.presetTemplates?.find(p => p.id === newPreset.id)) return prev;
+        const updated = { ...prev, presetTemplates: [...(prev.presetTemplates || []), newPreset] };
+        setTimeout(() => lsSetConfig(updated), 0);
+        return updated;
+      });
+
+      return true;
+    } catch (err: any) {
       console.error("[Supabase] addPresetTemplate error:", err);
+      toast.error(`Terjadi kesalahan: ${err.message || err}`);
+      return false;
     }
   }, []);
 
-  const updatePresetTemplate = useCallback(async (id: string, fields: Partial<PresetTemplate>) => {
-    setConfig((prev) => {
-      const updatedPresets = (prev.presetTemplates || []).map((p) => p.id === id ? { ...p, ...fields } : p);
-      const updated = { ...prev, presetTemplates: updatedPresets };
-      setTimeout(() => lsSetConfig(updated), 0);
-      return updated;
-    });
+  const updatePresetTemplate = useCallback(async (id: string, fields: Partial<PresetTemplate>): Promise<boolean> => {
     try {
-      await supabase.from("preset_templates").update({
-        name: fields.name,
-        image_overlay: fields.imageOverlay,
+      let overlayUrl: string | null | undefined = fields.imageOverlay;
+
+      // 1. Upload ke bucket terlebih dahulu jika overlay baru berupa base64
+      if (fields.imageOverlay && fields.imageOverlay.startsWith("data:")) {
+        try {
+          overlayUrl = await uploadOverlayToStorage(fields.imageOverlay, id);
+        } catch (uploadErr: any) {
+          console.error("[Storage] Gagal upload overlay saat update:", uploadErr);
+          toast.error("Gagal mengunggah gambar overlay baru. Harap pastikan storage bucket 'preset-overlays' sudah dibuat di Supabase Dashboard (SQL Editor) dengan RLS policy yang sesuai.");
+          return false;
+        }
+      } else if (fields.imageOverlay === undefined || fields.imageOverlay === null || fields.imageOverlay === "") {
+        // Overlay dihapus — bersihkan file lama dari bucket
+        overlayUrl = null;
+        deleteOverlayFromStorage(id).catch(() => {});
+      }
+
+      // 2. Siapkan fields database
+      const dbFields: Record<string, unknown> = {
         custom_slots: fields.customSlots,
         overlay_x: fields.overlayX,
         overlay_y: fields.overlayY,
@@ -768,9 +1116,45 @@ export function usePhotoboothStore() {
         overlay_h: fields.overlayH,
         overlay_rotation: fields.overlayRotation,
         force_layout: fields.forceLayout,
-      }).eq("id", id);
-    } catch (err) {
+        paper_size: fields.paperSize,
+      };
+
+      // Hanya sertakan image_overlay jika ada perubahan pada field overlay
+      if ("imageOverlay" in fields) {
+        dbFields.image_overlay = overlayUrl ?? null;
+      }
+
+      // 3. Update ke database
+      const { error: dbErr } = await supabase.from("preset_templates").update(dbFields).eq("id", id);
+
+      if (dbErr) {
+        console.error("[Supabase] Gagal mengupdate preset template di database:", dbErr);
+        toast.error(`Gagal memperbarui template: ${dbErr.message}`);
+        return false;
+      }
+
+      // 4. Update state lokal setelah sukses
+      setConfig((prev) => {
+        const updatedPresets = (prev.presetTemplates || []).map((p) => {
+          if (p.id === id) {
+            const updatedPreset = { ...p, ...fields };
+            if ("imageOverlay" in fields) {
+              updatedPreset.imageOverlay = overlayUrl ?? undefined;
+            }
+            return updatedPreset;
+          }
+          return p;
+        });
+        const updated = { ...prev, presetTemplates: updatedPresets };
+        setTimeout(() => lsSetConfig(updated), 0);
+        return updated;
+      });
+
+      return true;
+    } catch (err: any) {
       console.error("[Supabase] updatePresetTemplate error:", err);
+      toast.error(`Terjadi kesalahan: ${err.message || err}`);
+      return false;
     }
   }, []);
 
@@ -786,6 +1170,8 @@ export function usePhotoboothStore() {
       return updated;
     });
     try {
+      // Hapus file overlay dari bucket jika ada
+      deleteOverlayFromStorage(id).catch(() => {});
       await supabase.from("preset_templates").delete().eq("id", id);
     } catch (err) {
       console.error("[Supabase] deletePresetTemplate error:", err);

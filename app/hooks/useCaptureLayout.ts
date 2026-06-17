@@ -33,10 +33,7 @@ export function useCaptureLayout({
   }, [config, activeFrameId]);
 
   const isCustomFrame = React.useMemo(() => {
-    return !!(
-      activeTemplate &&
-      (!activeTemplate.customSlots || activeTemplate.customSlots.length <= 1)
-    );
+    return !!activeTemplate;
   }, [activeTemplate]);
 
   const isFilmFrame = React.useMemo(() => {
@@ -86,10 +83,8 @@ export function useCaptureLayout({
       const pW = 600, pPad = 35;
       const pPhW = pW - pPad * 2;
       if (isCustomFrame) {
-        const scaleX = pPhW / 500;
-        const tileH = (overlayH / 100) * 1202.5 * scaleX;
-        const h = pPad + tileH + pPad;
-        return { w: pW, h };
+        const is2R = activeTemplate?.paperSize === "2R";
+        return { w: is2R ? 591 : 1205, h: is2R ? 1772 : 1795 };
       }
       const h = pPad + pPhW + 140 + pPad;
       return { w: pW, h };
@@ -241,25 +236,29 @@ export function useCaptureLayout({
       const pPhW = pW - pPad * 2;
 
       if (isCustomFrame) {
-        const slot = (activeTemplate?.customSlots && activeTemplate.customSlots.length > 0)
-          ? activeTemplate.customSlots[0]
-          : { xPct: 5, yPct: 5, widthPct: 90, heightPct: 90, rotation: 0 };
+        const slotsList = (activeTemplate?.customSlots && activeTemplate.customSlots.length > 0)
+          ? activeTemplate.customSlots
+          : [{ id: "default_0", xPct: 5, yPct: 5, widthPct: 90, heightPct: 90, rotation: 0 }];
 
-        const scaleX = pPhW / 500;
-        const scaleY = scaleX;
+        const scaleX = cW / 500;
+        const scaleY = cH / 1202.5;
 
-        const sw = (slot.widthPct / 100) * 500 * scaleX;
-        const sh = (slot.heightPct / 100) * 1202.5 * scaleY;
+        const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
+        const sortedSlots = [...slotsList].sort((a, b) => collator.compare(a.id, b.id));
 
-        const sx = pPad + (slot.xPct / 100) * 500 * scaleX;
-        const sy = pPad + (slot.yPct / 100) * 1202.5 * scaleY;
+        return sortedSlots.map(s => {
+          const sw = (s.widthPct / 100) * 500 * scaleX;
+          const sh = (s.heightPct / 100) * 1202.5 * scaleY;
+          const sx = (s.xPct / 100) * 500 * scaleX;
+          const sy = (s.yPct / 100) * 1202.5 * scaleY;
 
-        return [{
-          left: `${(sx / cW) * 100}%`,
-          top: `${(sy / cH) * 100}%`,
-          width: `${(sw / cW) * 100}%`,
-          height: `${(sh / cH) * 100}%`,
-        }];
+          return {
+            left: `${(sx / cW) * 100}%`,
+            top: `${(sy / cH) * 100}%`,
+            width: `${(sw / cW) * 100}%`,
+            height: `${(sh / cH) * 100}%`,
+          };
+        });
       }
 
       return [
@@ -344,23 +343,41 @@ export function useCaptureLayout({
         const pW = 600, pPad = 35;
         const pPhW = pW - pPad * 2;
 
-        const scaleX = pPhW / 500;
-        const scaleY = scaleX;
+        if (isCustomFrame) {
+          const scaleX = cW / 500;
+          const scaleY = cH / 1202.5;
 
-        const tileH = (overlayH / 100) * 1202.5 * scaleY;
+          const ow = (overlayW / 100) * 500 * scaleX;
+          const oh = (overlayH / 100) * 1202.5 * scaleY;
 
-        const ow = (overlayW / 100) * 500 * scaleX;
-        const oh = tileH;
+          const ox = (overlayX / 100) * 500 * scaleX;
+          const oy = (overlayY / 100) * 1202.5 * scaleY;
 
-        const ox = pPad + (overlayX / 100) * 500 * scaleX;
-        const oy = pPad + (overlayY / 100) * 1202.5 * scaleY;
+          overlaysList = [{
+            left: `${(ox / cW) * 100}%`,
+            top: `${(oy / cH) * 100}%`,
+            width: `${(ow / cW) * 100}%`,
+            height: `${(oh / cH) * 100}%`,
+          }];
+        } else {
+          const scaleX = pPhW / 500;
+          const scaleY = scaleX;
 
-        overlaysList = [{
-          left: `${(ox / cW) * 100}%`,
-          top: `${(oy / cH) * 100}%`,
-          width: `${(ow / cW) * 100}%`,
-          height: `${(oh / cH) * 100}%`,
-        }];
+          const tileH = (overlayH / 100) * 1202.5 * scaleY;
+
+          const ow = (overlayW / 100) * 500 * scaleX;
+          const oh = tileH;
+
+          const ox = pPad + (overlayX / 100) * 500 * scaleX;
+          const oy = pPad + (overlayY / 100) * 1202.5 * scaleY;
+
+          overlaysList = [{
+            left: `${(ox / cW) * 100}%`,
+            top: `${(oy / cH) * 100}%`,
+            width: `${(ow / cW) * 100}%`,
+            height: `${(oh / cH) * 100}%`,
+          }];
+        }
       }
     } else if (activeTemplate?.imageOverlay) {
       overlaysList = [{
@@ -376,13 +393,14 @@ export function useCaptureLayout({
 
   // ─── Style helpers ────────────────────────────────────────────────────────────
   const getBackgroundStyle = React.useCallback((): React.CSSProperties => {
+    if (isCustomFrame)                  return { backgroundColor: "transparent", background: "transparent" };
     if (frameStyle === "neon")          return { background: "linear-gradient(to bottom, #0d0a16, #160f2c)" };
     if (frameStyle === "classic-white") return { backgroundColor: "#ffffff" };
     if (frameStyle === "classic-black") return { backgroundColor: "#09090b" };
     if (frameStyle === "pastel")        return { background: "linear-gradient(135deg, #fef2f2, #faf5ff, #eff6ff)" };
     if (frameStyle === "filmstrip")     return { backgroundColor: "#141416" };
     return { backgroundColor: "#18181b" };
-  }, [frameStyle]);
+  }, [isCustomFrame, frameStyle]);
 
   const getSlotBorderStyle = React.useCallback((index: number): React.CSSProperties => {
     if (isCustomFrame) {

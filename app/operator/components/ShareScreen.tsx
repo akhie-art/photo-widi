@@ -1,11 +1,12 @@
 "use client";
 
 import React, { useState, useEffect, useMemo } from "react";
-import { Download, Video, Image as ImageIcon, Archive, Loader2, ArrowRight, CheckSquare, Square, FolderDown, MessageCircle, Mail, Share2 } from "lucide-react";
+import { Download, Video, Image as ImageIcon, Archive, Loader2, ArrowRight, CheckSquare, Square, FolderDown, MessageCircle, Mail, Share2, Printer } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import JSZip from "jszip";
 import { EventConfig } from "../../hooks/usePhotoboothStore";
+import { Muxer, ArrayBufferTarget } from "mp4-muxer";
 
 interface ShareScreenProps {
   config: EventConfig;
@@ -17,6 +18,7 @@ interface ShareScreenProps {
   sessionsCount: number;
   photoId: string | null;
   onComplete: () => void;
+  handlePrint: () => void;
 }
 
 interface AssetItem {
@@ -38,8 +40,10 @@ export default function ShareScreen({
   sessionsCount,
   photoId,
   onComplete,
+  handlePrint,
 }: ShareScreenProps) {
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
+  const [videoExtension, setVideoExtension] = useState<string>("mp4");
   const [isVideoLoading, setIsVideoLoading] = useState(true);
   const [isZipLoading, setIsZipLoading] = useState(false);
 
@@ -47,21 +51,7 @@ export default function ShareScreen({
   const [activePreviewId, setActivePreviewId] = useState<string>("strip");
   const [isSharing, setIsSharing] = useState(false);
 
-  const whatsappUrl = useMemo(() => {
-    if (!customerPhone) return "";
-    let cleanNumber = customerPhone.replace(/\D/g, "");
-    if (cleanNumber.startsWith("0")) {
-      cleanNumber = "62" + cleanNumber.slice(1);
-    } else if (cleanNumber.startsWith("8")) {
-      cleanNumber = "62" + cleanNumber;
-    }
-    const origin = typeof window !== "undefined" ? window.location.origin : "";
-    const shareLink = photoId ? `${origin}/share/${photoId}` : "";
-    const text = encodeURIComponent(
-      `Halo ${customerName}, terima kasih telah berkunjung ke ${config.eventName.trim()}! Berikut hasil photobooth kamu dari sesi ini:\n\n${shareLink}\n\nSilakan simpan dan bagikan!`
-    );
-    return `https://api.whatsapp.com/send?phone=${cleanNumber}&text=${text}`;
-  }, [customerName, customerPhone, config.eventName, photoId]);
+
 
   const emailUrl = useMemo(() => {
     const origin = typeof window !== "undefined" ? window.location.origin : "";
@@ -73,37 +63,193 @@ export default function ShareScreen({
     return `mailto:?subject=${subject}&body=${body}`;
   }, [customerName, config.eventName, photoId]);
 
-  const handleNativeShare = async (asset: AssetItem) => {
-    if (!asset.url) return;
+  const handleNativeShare = async () => {
+    const selectedAssets = assets.filter(a => selectedIds.includes(a.id) && a.url);
+    if (selectedAssets.length === 0) {
+      toast.error("Tidak ada aset terpilih untuk dibagikan!");
+      return;
+    }
+
     setIsSharing(true);
     try {
-      const response = await fetch(asset.url);
-      const blob = await response.blob();
-      
-      let mimeType = blob.type;
-      if (asset.type === "video") {
-        mimeType = "video/webm";
-      } else if (asset.type === "photo" || asset.type === "strip") {
-        mimeType = "image/png";
+      const files: File[] = [];
+      for (const asset of selectedAssets) {
+        if (!asset.url) continue;
+        const response = await fetch(asset.url);
+        const blob = await response.blob();
+        
+        let mimeType = blob.type;
+        if (asset.type === "video") {
+          mimeType = "video/webm";
+        } else if (asset.type === "photo" || asset.type === "strip") {
+          mimeType = "image/png";
+        }
+
+        const file = new File([blob], asset.filename, { type: mimeType });
+        files.push(file);
       }
 
-      const file = new File([blob], asset.filename, { type: mimeType });
-
-      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      if (navigator.canShare && navigator.canShare({ files })) {
         await navigator.share({
-          files: [file],
-          title: asset.name,
-          text: `Halo, ini ${asset.name} dari sesi photobooth kamu!`,
+          files,
+          title: `Hasil Photobooth - ${config.eventName}`,
+          text: `Halo, berikut hasil dari sesi photobooth ${config.eventName}!`,
         });
         toast.success("Berhasil membuka menu bagikan!");
       } else {
         toast.error("Bagikan langsung tidak didukung di browser ini. Gunakan Safari/Chrome Mobile, atau unduh berkas secara manual.");
       }
-    } catch (err) {
+    } catch (err: any) {
+      if (err instanceof DOMException && err.name === "AbortError") {
+        console.log("Native share canceled by user");
+        return;
+      }
       console.error("Share error:", err);
       toast.error("Gagal memicu menu bagikan.");
     } finally {
       setIsSharing(false);
+    }
+  };
+
+  const [isWaSharing, setIsWaSharing] = useState(false);
+
+  const handleWhatsAppShare = async (e: React.MouseEvent<HTMLButtonElement>) => {
+    if (typeof window === "undefined" || !activeAsset?.url) return;
+
+    // Prevent default navigation to handle sharing manually
+    e.preventDefault();
+    setIsWaSharing(true);
+
+    try {
+      const response = await fetch(activeAsset.url);
+      const blob = await response.blob();
+
+      let mimeType = blob.type;
+      if (activeAsset.type === "video") {
+        mimeType = "video/webm";
+      } else if (activeAsset.type === "photo" || activeAsset.type === "strip") {
+        mimeType = "image/png";
+      }
+
+      const file = new File([blob], activeAsset.filename, { type: mimeType });
+
+      // 1. Mobile/Tablet: Gunakan Web Share API jika didukung untuk langsung mengirim berkas file
+      if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+        const origin = window.location.origin;
+        const shareLink = photoId ? `${origin}/share/${photoId}` : "";
+        const caption = `Halo ${customerName}, terima kasih telah berkunjung ke ${config.eventName.trim()}! Berikut hasil photobooth kamu:\n\n${shareLink}`;
+
+        await navigator.share({
+          files: [file],
+          title: activeAsset.name,
+          text: caption,
+        });
+        toast.success("Berhasil memicu menu bagikan berkas!");
+      } 
+      // 2. Desktop/PC: Salin gambar ke clipboard agar user tinggal Paste (Ctrl+V / Cmd+V) di WhatsApp
+      else {
+        let copied = false;
+        if (mimeType === "image/png" && navigator.clipboard && window.ClipboardItem) {
+          try {
+            const pngBlob = blob.type === "image/png" ? blob : new Blob([blob], { type: "image/png" });
+            await navigator.clipboard.write([
+              new ClipboardItem({
+                "image/png": pngBlob
+              })
+            ]);
+            copied = true;
+          } catch (clipErr) {
+            console.warn("Failed to write image to clipboard:", clipErr);
+          }
+        }
+
+        if (copied) {
+          toast.success("Gambar disalin ke clipboard! Silakan buka WhatsApp dan tempel (Paste / Cmd+V) langsung di chat.");
+        } else {
+          toast.error("Salin gambar ke clipboard tidak didukung di browser ini. Silakan unduh gambar dan seret ke chat.");
+        }
+      }
+    } catch (err: any) {
+      if (err instanceof DOMException && err.name === "AbortError") {
+        console.log("WhatsApp share canceled by user");
+        return;
+      }
+      console.error("WhatsApp share error:", err);
+      toast.error("Gagal memproses gambar untuk WhatsApp.");
+    } finally {
+      setIsWaSharing(false);
+    }
+  };
+
+  const [isEmailSharing, setIsEmailSharing] = useState(false);
+
+  const handleEmailShare = async (e: React.MouseEvent<HTMLButtonElement>) => {
+    if (typeof window === "undefined" || !activeAsset?.url) return;
+
+    e.preventDefault();
+    setIsEmailSharing(true);
+
+    try {
+      const response = await fetch(activeAsset.url);
+      const blob = await response.blob();
+
+      let mimeType = blob.type;
+      if (activeAsset.type === "video") {
+        mimeType = "video/webm";
+      } else if (activeAsset.type === "photo" || activeAsset.type === "strip") {
+        mimeType = "image/png";
+      }
+
+      const file = new File([blob], activeAsset.filename, { type: mimeType });
+
+      // 1. Mobile/Tablet: Gunakan Web Share API jika didukung
+      if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+        const origin = window.location.origin;
+        const shareLink = photoId ? `${origin}/share/${photoId}` : "";
+        const body = `Halo ${customerName},\n\nTerima kasih telah berkunjung ke ${config.eventName.trim()}!\n\nBerikut hasil photobooth kamu:\n${shareLink}`;
+
+        await navigator.share({
+          files: [file],
+          title: `Foto & Video Photobooth - ${config.eventName}`,
+          text: body,
+        });
+        toast.success("Berhasil memicu bagikan berkas ke Email!");
+      } 
+      // 2. Desktop/PC: Salin gambar ke clipboard + buka aplikasi Email default
+      else {
+        let copied = false;
+        if (mimeType === "image/png" && navigator.clipboard && window.ClipboardItem) {
+          try {
+            const pngBlob = blob.type === "image/png" ? blob : new Blob([blob], { type: "image/png" });
+            await navigator.clipboard.write([
+              new ClipboardItem({
+                "image/png": pngBlob
+              })
+            ]);
+            copied = true;
+          } catch (clipErr) {
+            console.warn("Failed to write image to clipboard for email:", clipErr);
+          }
+        }
+
+        // Buka email composer
+        window.location.href = emailUrl;
+
+        if (copied) {
+          toast.success("Gambar disalin ke clipboard! Tempel (Paste / Cmd+V) langsung di badan email.");
+        } else {
+          toast.success("Membuka aplikasi Email. Silakan bagikan tautan atau lampirkan hasil unduhan.");
+        }
+      }
+    } catch (err: any) {
+      if (err instanceof DOMException && err.name === "AbortError") {
+        console.log("Email share canceled by user");
+        return;
+      }
+      console.error("Email share error:", err);
+      window.location.href = emailUrl;
+    } finally {
+      setIsEmailSharing(false);
     }
   };
 
@@ -115,9 +261,10 @@ export default function ShareScreen({
     const generateVideo = async () => {
       try {
         setIsVideoLoading(true);
-        const url = await generateSlideshowVideo(capturedPhotos);
+        const result = await generateSlideshowVideo(capturedPhotos);
         if (active) {
-          setVideoUrl(url);
+          setVideoUrl(result.url);
+          setVideoExtension(result.extension);
         }
       } catch (err) {
         console.error("Failed to generate slideshow video:", err);
@@ -169,13 +316,13 @@ export default function ShareScreen({
         name: "Video Kumpulan Foto",
         type: "video",
         url: videoUrl,
-        filename: `${config.eventName.replace(/\s+/g, "_")}_session_${currentSessionNum}_video.webm`,
+        filename: `${config.eventName.replace(/\s+/g, "_")}_session_${currentSessionNum}_video.${videoExtension}`,
         thumbnail: capturedPhotos[0] || null,
       });
     }
 
     return list;
-  }, [compiledStripUrl, capturedPhotos, videoUrl, config.eventName, currentSessionNum]);
+  }, [compiledStripUrl, capturedPhotos, videoUrl, videoExtension, config.eventName, currentSessionNum]);
 
   // Select all assets by default when they first load
   useEffect(() => {
@@ -266,14 +413,19 @@ export default function ShareScreen({
   const activeAsset = assets.find(a => a.id === activePreviewId) || assets[0];
 
   return (
-    <div className="max-w-5xl mx-auto w-full bg-white dark:bg-[#121214] border border-zinc-200 dark:border-zinc-900 rounded-3xl p-6 shadow-xl flex flex-col gap-6 animate-fade-in duration-300 transition-colors">
+    <div className="h-screen w-screen bg-[#FFFBF7] dark:bg-[#0b0b0c] text-zinc-800 dark:text-[#e3e3e3] font-sans flex flex-col p-6 sm:p-8 select-none relative overflow-hidden transition-colors duration-300">
+      {/* Visual Ambient Background Glows */}
+      <div className="absolute top-[-10%] left-[-10%] w-[30%] aspect-square rounded-full bg-emerald-500/5 blur-[80px] pointer-events-none z-0" />
+      <div className="absolute bottom-[-10%] right-[-10%] w-[30%] aspect-square rounded-full bg-blue-500/5 blur-[80px] pointer-events-none z-0" />
       
       {/* Top Header Section */}
       <div className="flex items-center justify-between w-full border-b border-zinc-200/50 dark:border-zinc-800/40 pb-4 select-none">
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-xl bg-emerald-600 flex items-center justify-center text-white font-extrabold text-xs tracking-tighter shadow-md shadow-emerald-500/10">
-            GB
-          </div>
+          {config.logoUrl && (
+            <div className="w-8 h-8 rounded-xl overflow-hidden bg-zinc-50 dark:bg-zinc-950 flex items-center justify-center border border-zinc-200/50 dark:border-zinc-800/40 shrink-0">
+              <img src={config.logoUrl} alt="Logo" className="w-full h-full object-contain" />
+            </div>
+          )}
           <div className="flex flex-col text-left">
             <span className="text-xs font-bold text-zinc-900 dark:text-zinc-100 leading-none">
               Sesi Selesai! Simpan Aset Anda
@@ -289,7 +441,7 @@ export default function ShareScreen({
       </div>
 
       {/* 2 Columns Layout */}
-      <div className="w-full flex flex-col md:flex-row gap-8 justify-center items-stretch">
+      <div className="flex-1 w-full flex flex-col md:flex-row gap-4 md:gap-8 justify-center items-stretch overflow-y-auto pr-1">
         
         {/* Column 1: Asset list checklist */}
         <div className="w-full md:w-1/2 flex flex-col bg-zinc-50/50 dark:bg-zinc-950/20 p-5 rounded-2xl border border-zinc-100 dark:border-zinc-900">
@@ -388,25 +540,6 @@ export default function ShareScreen({
             })}
           </div>
 
-          {/* Download selected ZIP button */}
-          <Button
-            onClick={handleDownloadZip}
-            disabled={selectedIds.length === 0 || isZipLoading}
-            className="w-full mt-5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-semibold py-3.5 rounded-xl transition-all text-xs tracking-wider flex items-center justify-center gap-1.5 shadow-lg shadow-emerald-500/20 hover:scale-[1.01] active:scale-[0.99] border-none cursor-pointer"
-          >
-            {isZipLoading ? (
-              <>
-                <Loader2 className="w-4 h-4 animate-spin" />
-                <span>Sedang Mengompresi...</span>
-              </>
-            ) : (
-              <>
-                <Archive className="w-4 h-4" strokeWidth={1.5} />
-                <span>Unduh Terpilih ({selectedIds.length}) (.ZIP)</span>
-              </>
-            )}
-          </Button>
-
           {/* QR Code for Mobile Download */}
           {photoId && (
             <div className="mt-5 bg-zinc-50/50 dark:bg-zinc-950/40 p-4.5 rounded-2xl border border-zinc-200 dark:border-zinc-800 flex items-center gap-4 text-left transition-colors">
@@ -434,112 +567,125 @@ export default function ShareScreen({
           )}
         </div>
 
-        {/* Column 2: Dynamic high-res preview panel */}
-        <div className="w-full md:w-1/2 flex flex-col items-center gap-4 bg-zinc-50/50 dark:bg-zinc-950/20 p-5 rounded-2xl border border-zinc-100 dark:border-zinc-900 justify-center">
-          <div className="flex items-center gap-1.5 self-start mb-1 text-zinc-700 dark:text-zinc-300">
-            {activeAsset?.type === "video" ? (
-              <Video className="w-4 h-4 text-emerald-500" />
-            ) : (
-              <ImageIcon className="w-4 h-4 text-emerald-500" />
-            )}
-            <span className="text-xs font-bold font-sans">Pratinjau Aset: {activeAsset?.name || "Foto Strip Final"}</span>
-          </div>
+        {/* Column 2: Dynamic high-res preview panel & actions split */}
+        <div className="w-full md:w-1/2 flex flex-col gap-4">
+          
+          {/* Card 1: Pratinjau Aset */}
+          <div className="flex-1 flex flex-col items-center gap-4 bg-zinc-50/50 dark:bg-zinc-950/20 p-5 rounded-2xl border border-zinc-100 dark:border-zinc-900 justify-center">
+            <div className="flex items-center gap-1.5 self-start mb-1 text-zinc-700 dark:text-zinc-300">
+              {activeAsset?.type === "video" ? (
+                <Video className="w-4 h-4 text-emerald-500" />
+              ) : (
+                <ImageIcon className="w-4 h-4 text-emerald-500" />
+              )}
+              <span className="text-xs font-bold font-sans">Pratinjau Aset: {activeAsset?.name || "Foto Strip Final"}</span>
+            </div>
 
-          <div className="flex-1 flex items-center justify-center w-full min-h-[300px]">
-            {activeAsset?.type === "video" ? (
-              isVideoLoading ? (
-                <div className="flex flex-col items-center gap-2 text-zinc-400">
-                  <Loader2 className="w-6 h-6 animate-spin text-emerald-500" />
-                  <span className="text-[10px] font-mono">Membuat video...</span>
-                </div>
-              ) : activeAsset.url ? (
-                <div className="w-full aspect-[4/3] max-h-[380px] rounded-xl overflow-hidden bg-black border border-zinc-200 dark:border-zinc-800">
-                  <video
+            <div className="flex-1 flex items-center justify-center w-full min-h-[300px]">
+              {activeAsset?.type === "video" ? (
+                isVideoLoading ? (
+                  <div className="flex flex-col items-center gap-2 text-zinc-400">
+                    <Loader2 className="w-6 h-6 animate-spin text-emerald-500" />
+                    <span className="text-[10px] font-mono">Membuat video...</span>
+                  </div>
+                ) : activeAsset.url ? (
+                  <div className="w-full aspect-[4/3] max-h-[380px] rounded-xl overflow-hidden bg-black border border-zinc-200 dark:border-zinc-800">
+                    <video
+                      src={activeAsset.url}
+                      controls
+                      loop
+                      autoPlay
+                      muted
+                      playsInline
+                      className="w-full h-full object-contain"
+                    />
+                  </div>
+                ) : (
+                  <span className="text-xs text-zinc-400">Gagal membuat video</span>
+                )
+              ) : activeAsset?.url ? (
+                <div className="relative rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-md overflow-hidden bg-zinc-100 max-h-[380px] w-full flex items-center justify-center">
+                  <img
                     src={activeAsset.url}
-                    controls
-                    loop
-                    autoPlay
-                    muted
-                    playsInline
-                    className="w-full h-full object-contain"
+                    alt={activeAsset.name}
+                    className={`object-contain max-h-[380px] ${
+                      activeAsset.type === "strip" ? "aspect-[500/1202.5] w-[150px]" : "aspect-[4/3] w-full"
+                    }`}
                   />
                 </div>
               ) : (
-                <span className="text-xs text-zinc-400">Gagal membuat video</span>
-              )
-            ) : activeAsset?.url ? (
-              <div className="relative rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-md overflow-hidden bg-zinc-100 max-h-[380px] w-full flex items-center justify-center">
-                <img
-                  src={activeAsset.url}
-                  alt={activeAsset.name}
-                  className={`object-contain max-h-[380px] ${
-                    activeAsset.type === "strip" ? "aspect-[500/1202.5] w-[150px]" : "aspect-[4/3] w-full"
-                  }`}
-                />
-              </div>
-            ) : (
-              <span className="text-xs text-zinc-400">Aset tidak ditemukan</span>
-            )}
-          </div>
-
-          <Button
-            onClick={() => handleDownloadSingle(activeAsset)}
-            disabled={!activeAsset?.url || (activeAsset.type === "video" && isVideoLoading)}
-            className="w-full mt-4 bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-900 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-200 font-semibold py-3 rounded-xl transition-all text-xs tracking-wider flex items-center justify-center gap-1.5 cursor-pointer border border-zinc-200 dark:border-zinc-800"
-          >
-            <Download className="w-4 h-4" />
-            <span>Unduh Aset Ini saja</span>
-          </Button>
-
-          {/* Share Actions */}
-          <div className="w-full flex flex-col gap-2 border-t border-zinc-200/50 dark:border-zinc-800/60 pt-4 mt-1">
-            <span className="text-[10px] text-zinc-500 font-mono tracking-wider uppercase font-semibold text-left">
-              Bagikan Aset Ini
-            </span>
-            <div className="grid grid-cols-3 gap-2 w-full">
-              {/* WhatsApp Button */}
-              <a
-                href={whatsappUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                onClick={() => toast.success("Membuka WhatsApp Chat. Anda dapat drag-and-drop hasil unduhan langsung ke chat.")}
-                className="flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl border border-emerald-250 dark:border-emerald-900/40 bg-emerald-50/50 dark:bg-emerald-950/20 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-100/50 dark:hover:bg-emerald-950/40 transition-all font-semibold text-xs text-center cursor-pointer no-underline select-none"
-              >
-                <MessageCircle className="w-4 h-4" />
-                <span>WhatsApp</span>
-              </a>
-
-              {/* Email Button */}
-              <a
-                href={emailUrl}
-                className="flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/40 text-zinc-600 dark:text-zinc-350 hover:bg-zinc-100/50 dark:hover:bg-zinc-800 transition-all font-semibold text-xs text-center cursor-pointer no-underline select-none"
-              >
-                <Mail className="w-4 h-4" />
-                <span>Email</span>
-              </a>
-
-              {/* Native Share / AirDrop Button */}
-              <Button
-                type="button"
-                onClick={() => handleNativeShare(activeAsset)}
-                disabled={isSharing || !activeAsset?.url || (activeAsset.type === "video" && isVideoLoading)}
-                className="flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl border border-blue-200 dark:border-blue-900/40 bg-blue-50/50 dark:bg-blue-950/20 text-blue-600 dark:text-blue-400 hover:bg-blue-100/50 dark:hover:bg-blue-950/40 transition-all font-semibold text-xs text-center cursor-pointer border shadow-sm select-none border-none"
-              >
-                {isSharing ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
-                  <Share2 className="w-4 h-4" />
-                )}
-                <span>AirDrop / Share</span>
-              </Button>
+                <span className="text-xs text-zinc-400">Aset tidak ditemukan</span>
+              )}
             </div>
           </div>
+
+          {/* Card 2: Aksi Bagikan */}
+          <div className="flex flex-col gap-4 bg-zinc-50/50 dark:bg-zinc-950/20 p-5 rounded-2xl border border-zinc-100 dark:border-zinc-900 justify-center">
+            {/* Share Actions */}
+            <div className="w-full flex flex-col gap-2">
+              <span className="text-[10px] text-zinc-500 font-mono tracking-wider uppercase font-semibold text-left">
+                Bagikan Aset Ini
+              </span>
+              <div className="grid grid-cols-3 gap-2 w-full">
+                {/* WhatsApp Button */}
+                <button
+                  type="button"
+                  onClick={handleWhatsAppShare}
+                  className="flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl border border-emerald-250 dark:border-emerald-900/40 bg-emerald-50/50 dark:bg-emerald-950/20 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-100/50 dark:hover:bg-emerald-950/40 transition-all font-semibold text-xs text-center cursor-pointer no-underline select-none w-full"
+                >
+                  {isWaSharing ? (
+                    <Loader2 className="w-4 h-4 animate-spin text-emerald-500" />
+                  ) : (
+                    <MessageCircle className="w-4 h-4" />
+                  )}
+                  <span>WhatsApp</span>
+                </button>
+
+                {/* Email Button */}
+                <button
+                  type="button"
+                  onClick={handleEmailShare}
+                  className="flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/40 text-zinc-600 dark:text-zinc-355 hover:bg-zinc-100/50 dark:hover:bg-zinc-800 transition-all font-semibold text-xs text-center cursor-pointer no-underline select-none w-full"
+                >
+                  {isEmailSharing ? (
+                    <Loader2 className="w-4 h-4 animate-spin text-zinc-500" />
+                  ) : (
+                    <Mail className="w-4 h-4" />
+                  )}
+                  <span>Email</span>
+                </button>
+
+                {/* Native Share / AirDrop Button */}
+                <Button
+                  type="button"
+                  onClick={handleNativeShare}
+                  disabled={isSharing || selectedIds.length === 0 || (selectedIds.includes("video") && isVideoLoading)}
+                  className="flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl border border-blue-200 dark:border-blue-900/40 bg-blue-50/50 dark:bg-blue-950/20 text-blue-600 dark:text-blue-400 hover:bg-blue-100/50 dark:hover:bg-blue-950/40 transition-all font-semibold text-xs text-center cursor-pointer border shadow-sm select-none border-none"
+                >
+                  {isSharing ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Share2 className="w-4 h-4" />
+                  )}
+                  <span>AirDrop / Share</span>
+                </Button>
+              </div>
+            </div>
+          </div>
+
         </div>
 
       </div>
 
       {/* Selesai & Lanjut Button */}
-      <div className="border-t border-zinc-200/50 dark:border-zinc-800/40 pt-4 flex justify-end">
+      <div className="border-t border-zinc-200/50 dark:border-zinc-800/40 pt-4 flex justify-between items-center">
+        <Button
+          onClick={handlePrint}
+          className="bg-emerald-600 hover:bg-emerald-500 text-white font-semibold py-3.5 px-8 rounded-xl transition-all text-xs tracking-wider flex items-center justify-center gap-1.5 hover:scale-[1.01] active:scale-[0.99] cursor-pointer border-none shadow-md"
+        >
+          <Printer className="w-4 h-4" />
+          <span>Cetak Strip</span>
+        </Button>
         <Button
           onClick={onComplete}
           className="bg-zinc-900 hover:bg-zinc-800 dark:bg-white dark:hover:bg-zinc-100 dark:text-zinc-950 text-white font-semibold py-3.5 px-8 rounded-xl transition-all text-xs tracking-wider flex items-center justify-center gap-1.5 hover:scale-[1.01] active:scale-[0.99] cursor-pointer border-none shadow-md"
@@ -553,10 +699,140 @@ export default function ShareScreen({
   );
 }
 
-/**
- * Generate a sequential video slideshow from base64 frames using browser MediaRecorder
- */
-const generateSlideshowVideo = (photos: string[]): Promise<string> => {
+interface VideoResult {
+  url: string;
+  extension: "mp4" | "webm";
+}
+
+const generateSlideshowVideo = async (photos: string[]): Promise<VideoResult> => {
+  if (typeof window === "undefined") {
+    throw new Error("Window not defined");
+  }
+
+  const VideoEncoderClass = (window as any).VideoEncoder;
+  const VideoFrameClass = (window as any).VideoFrame;
+
+  // 1. Check if WebCodecs (VideoEncoder) is supported. If not, fallback to MediaRecorder.
+  if (!VideoEncoderClass || !VideoFrameClass) {
+    console.warn("WebCodecs VideoEncoder/VideoFrame not supported, falling back to MediaRecorder (WebM)");
+    return generateSlideshowVideoFallback(photos);
+  }
+
+  return new Promise((resolve, reject) => {
+    const canvas = document.createElement("canvas");
+    canvas.width = 640;
+    canvas.height = 480;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return reject("Canvas context not available");
+
+    const images: HTMLImageElement[] = [];
+    let loadedCount = 0;
+
+    const startRecordingWebCodecs = async () => {
+      try {
+        const muxer = new Muxer({
+          target: new ArrayBufferTarget(),
+          video: {
+            codec: "avc", // H.264 Profile (widely compatible on iOS/iPhone)
+            width: canvas.width,
+            height: canvas.height,
+          },
+          fastStart: "fragmented"
+        });
+
+        const encoder = new VideoEncoderClass({
+          output: (chunk: any, meta: any) => muxer.addVideoChunk(chunk, meta),
+          error: (e: any) => {
+            console.error("VideoEncoder error:", e);
+            generateSlideshowVideoFallback(photos).then(resolve).catch(reject);
+          }
+        });
+
+        encoder.configure({
+          codec: "avc1.42001f",
+          width: canvas.width,
+          height: canvas.height,
+          bitrate: 1200000,
+          framerate: 20
+        });
+
+        const frameRate = 20;
+        const durationPerImage = 1.2;
+        const framesPerImage = durationPerImage * frameRate;
+        const totalFrames = images.length * framesPerImage;
+
+        for (let currentFrame = 0; currentFrame < totalFrames; currentFrame++) {
+          const imageIndex = Math.floor(currentFrame / framesPerImage) % images.length;
+          const img = images[imageIndex];
+
+          ctx.fillStyle = "#0d0d10";
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+          if (img) {
+            const canvasAspect = canvas.width / canvas.height;
+            const imgAspect = img.width / img.height;
+            let drawWidth = canvas.width;
+            let drawHeight = canvas.height;
+            let drawX = 0;
+            let drawY = 0;
+
+            if (imgAspect > canvasAspect) {
+              drawWidth = canvas.height * imgAspect;
+              drawX = (canvas.width - drawWidth) / 2;
+            } else {
+              drawHeight = canvas.width / imgAspect;
+              drawY = (canvas.height - drawHeight) / 2;
+            }
+
+            ctx.drawImage(img, drawX, drawY, drawWidth, drawHeight);
+          }
+
+          const timestampUs = Math.round((currentFrame * 1000000) / frameRate);
+          const frame = new VideoFrameClass(canvas, { timestamp: timestampUs });
+
+          const isKeyFrame = currentFrame % framesPerImage === 0;
+          encoder.encode(frame, { keyFrame: isKeyFrame });
+          frame.close();
+        }
+
+        await encoder.flush();
+        muxer.finalize();
+
+        const buffer = muxer.target.buffer;
+        const blob = new Blob([buffer], { type: "video/mp4" });
+        resolve({
+          url: URL.createObjectURL(blob),
+          extension: "mp4"
+        });
+
+      } catch (err) {
+        console.error("WebCodecs failed:", err);
+        generateSlideshowVideoFallback(photos).then(resolve).catch(reject);
+      }
+    };
+
+    photos.forEach((src, index) => {
+      const img = new Image();
+      img.crossOrigin = "anonymous";
+      img.onload = () => {
+        images[index] = img;
+        loadedCount++;
+        if (loadedCount === photos.length) {
+          startRecordingWebCodecs();
+        }
+      };
+      img.onerror = () => {
+        loadedCount++;
+        if (loadedCount === photos.length) {
+          startRecordingWebCodecs();
+        }
+      };
+      img.src = src;
+    });
+  });
+};
+
+const generateSlideshowVideoFallback = (photos: string[]): Promise<VideoResult> => {
   return new Promise((resolve, reject) => {
     if (typeof window === "undefined" || !window.MediaRecorder) {
       return reject("MediaRecorder not supported");
@@ -575,7 +851,7 @@ const generateSlideshowVideo = (photos: string[]): Promise<string> => {
       try {
         let stream: MediaStream;
         if (canvas.captureStream) {
-          stream = canvas.captureStream(20); // 20 fps
+          stream = canvas.captureStream(20);
         } else if ((canvas as any).mozCaptureStream) {
           stream = (canvas as any).mozCaptureStream(20);
         } else {
@@ -606,8 +882,13 @@ const generateSlideshowVideo = (photos: string[]): Promise<string> => {
         };
 
         mediaRecorder.onstop = () => {
-          const blob = new Blob(chunks, { type: mediaRecorder.mimeType || "video/webm" });
-          resolve(URL.createObjectURL(blob));
+          const mime = mediaRecorder.mimeType || "video/webm";
+          const isMp4 = mime.includes("mp4");
+          const blob = new Blob(chunks, { type: mime });
+          resolve({
+            url: URL.createObjectURL(blob),
+            extension: isMp4 ? "mp4" : "webm"
+          });
         };
 
         mediaRecorder.start();

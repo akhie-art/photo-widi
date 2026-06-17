@@ -52,7 +52,7 @@ export default function CameraStandbyCard({
     <div className={
       isCapturing 
         ? "fixed inset-0 bg-black z-50 flex items-center justify-center select-none overflow-hidden touch-none"
-        : "flex-1 bg-white dark:bg-[#121214] border border-zinc-200/80 dark:border-zinc-800/80 rounded-3xl p-5 flex flex-col gap-5 shadow-xl transition-colors"
+        : "flex-1 bg-white dark:bg-[#121214] border border-zinc-200 dark:border-zinc-800 rounded-3xl p-3 sm:p-5 flex flex-col gap-3 sm:gap-5 transition-colors"
     }>
       
       {/* 1. HUD Header - Regular Mode (Only shown if not capturing) */}
@@ -100,23 +100,7 @@ export default function CameraStandbyCard({
         </div>
       )}
 
-      {/* 2. HUD Header - Fullscreen Capture Mode (Only shown if capturing) */}
-      {isCapturing && (
-        <div className="absolute top-6 inset-x-6 flex items-center justify-between z-20 pointer-events-none select-none">
-          <div className="flex items-center gap-3">
-            <div className="bg-black/60 border border-white/10 text-white font-mono text-xs font-bold px-3 py-2 rounded-xl backdrop-blur-md uppercase tracking-wider">
-              Sesi {currentSessionNum}/{sessionsCount}
-            </div>
-            <div className="bg-blue-600/90 text-white font-mono text-xs font-bold px-3 py-2 rounded-xl backdrop-blur-md uppercase tracking-wider shadow-lg">
-              Foto {currentCaptureNum} dari {layoutsCount}
-            </div>
-          </div>
-          <span className="bg-red-655 border border-red-500/20 px-3 py-1.5 rounded-xl text-red-500 bg-red-500/10 font-mono text-xs font-bold tracking-wider animate-pulse shadow-md flex items-center gap-2">
-            <span className="h-2.5 w-2.5 rounded-full bg-red-500 animate-ping"></span>
-            MEMOTRET
-          </span>
-        </div>
-      )}
+
 
       {/* 3. Camera Viewport Container */}
       <div className={
@@ -168,18 +152,7 @@ export default function CameraStandbyCard({
           </div>
         )}
 
-        {/* HUD: Bottom bar (Pose suggestion / instructions) (Only in fullscreen capturing) */}
-        {isCapturing && poseAlert && (
-          <div className="absolute bottom-10 inset-x-6 flex justify-center z-20 text-center animate-fade-in duration-200">
-            <div className="bg-black/75 border border-white/10 text-white text-sm sm:text-base font-bold px-6 py-4 rounded-2xl backdrop-blur-md shadow-2xl max-w-lg leading-relaxed flex items-center gap-3">
-              <span className="flex h-3 w-3 relative">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-3 w-3 bg-blue-500"></span>
-              </span>
-              <span>{poseAlert}</span>
-            </div>
-          </div>
-        )}
+
       </div>
 
       {/* 4. Controls — hidden once all photos are done or during capturing */}

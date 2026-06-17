@@ -173,7 +173,12 @@ export default function OperatorDashboard() {
     }
   };
 
-  const handleOperatorLogout = () => {
+  const handleOperatorLogout = async () => {
+    try {
+      await supabase.auth.signOut();
+    } catch (err) {
+      console.error("Sign out error:", err);
+    }
     sessionStorage.removeItem("glow_operator_auth");
     sessionStorage.removeItem("glow_operator_name");
     setCurrentOperator(null);

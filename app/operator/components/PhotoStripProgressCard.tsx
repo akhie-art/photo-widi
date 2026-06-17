@@ -1,9 +1,8 @@
 "use client";
 
-import React from "react";
-import { RefreshCw, X, Check } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { PlacedSticker, FrameTemplate, EventConfig } from "../../hooks/usePhotoboothStore";
+import React, { useRef } from "react";
+import { RefreshCw, X, ArrowRight, Maximize2 } from "lucide-react";
+import { FrameTemplate, EventConfig, StickerAsset, PlacedSticker } from "../../hooks/usePhotoboothStore";
 
 interface PhotoStripProgressCardProps {
   containerRef: React.RefObject<HTMLDivElement | null>;
@@ -21,20 +20,177 @@ interface PhotoStripProgressCardProps {
   activeTemplate?: FrameTemplate;
   getBackgroundStyle: () => React.CSSProperties;
   getSlotBorderStyle: (index: number) => React.CSSProperties;
-  placedStickers: PlacedSticker[];
-  activeStickerId: string | null;
-  setActiveStickerId: (id: string | null) => void;
-  handlePointerDown: (e: React.PointerEvent<HTMLDivElement>, id: string, type: "drag" | "resize") => void;
-  handlePointerMove: (e: React.PointerEvent<HTMLDivElement>) => void;
-  handlePointerUp: (e: React.PointerEvent<HTMLDivElement>) => void;
   isCapturing: boolean;
   onRetakeSlot?: (index: number) => void;
-  onDeleteSticker?: (id: string) => void;
   onComplete?: () => void;
   filledPhotosCount: number;
   config: EventConfig;
+  placedStickers?: PlacedSticker[];
+  onRemoveSticker?: (id: string) => void;
+  onUpdateSticker?: (id: string, updates: Partial<PlacedSticker>) => void;
 }
 
+const InteractiveSticker = ({
+  sticker,
+  asset,
+  containerRef,
+  isCapturing,
+  onRemove,
+  onUpdate,
+}: {
+  sticker: PlacedSticker;
+  asset: StickerAsset;
+  containerRef: React.RefObject<HTMLDivElement | null>;
+  isCapturing: boolean;
+  onRemove?: (id: string) => void;
+  onUpdate?: (id: string, updates: Partial<PlacedSticker>) => void;
+}) => {
+  const isEmoji = !asset.imageUrl.startsWith("data:") && !asset.imageUrl.startsWith("http") && !asset.imageUrl.startsWith("/");
+
+  const handleDragStart = (e: React.PointerEvent) => {
+    if (isCapturing || !onUpdate || !containerRef.current) return;
+    e.preventDefault();
+    e.stopPropagation();
+
+    const rect = containerRef.current.getBoundingClientRect();
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const startXPct = sticker.xPct;
+    const startYPct = sticker.yPct;
+
+    const onMove = (moveEvent: PointerEvent) => {
+      const deltaX = moveEvent.clientX - startX;
+      const deltaY = moveEvent.clientY - startY;
+
+      const newXPct = startXPct + (deltaX / rect.width) * 100;
+      const newYPct = startYPct + (deltaY / rect.height) * 100;
+
+      onUpdate(sticker.id, { xPct: newXPct, yPct: newYPct });
+    };
+
+    const onUp = () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+    };
+
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+  };
+
+  const handleTransformStart = (e: React.PointerEvent) => {
+    if (isCapturing || !onUpdate || !containerRef.current) return;
+    e.preventDefault();
+    e.stopPropagation();
+
+    const rect = containerRef.current.getBoundingClientRect();
+    const centerX = rect.left + (sticker.xPct / 100) * rect.width;
+    const centerY = rect.top + (sticker.yPct / 100) * rect.height;
+
+    const startX = e.clientX;
+    const startY = e.clientY;
+
+    const startAngle = Math.atan2(startY - centerY, startX - centerX);
+    const startDist = Math.hypot(startY - centerY, startX - centerX) || 1;
+
+    const initialRotation = sticker.rotation;
+    const initialScale = sticker.scalePct;
+
+    const onMove = (moveEvent: PointerEvent) => {
+      const currentX = moveEvent.clientX;
+      const currentY = moveEvent.clientY;
+
+      const currentAngle = Math.atan2(currentY - centerY, currentX - centerX);
+      const currentDist = Math.hypot(currentY - centerY, currentX - centerX);
+
+      let angleDiff = (currentAngle - startAngle) * (180 / Math.PI);
+      const newRotation = initialRotation + angleDiff;
+
+      const scaleRatio = currentDist / startDist;
+      const newScale = initialScale * scaleRatio;
+
+      onUpdate(sticker.id, {
+        rotation: newRotation,
+        scalePct: Math.max(10, newScale), 
+      });
+    };
+
+    const onUp = () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+    };
+
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+  };
+
+  // Komponen Helper untuk merender tuas di sudut agar kode JSX lebih bersih
+  const TransformHandle = ({ position, cursor }: { position: string, cursor: string }) => {
+    if (isCapturing || !onUpdate) return null;
+    return (
+      <div
+        onPointerDown={handleTransformStart}
+        className={`absolute w-3.5 h-3.5 rounded-full bg-blue-500 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-md z-40 border-2 border-white dark:border-[#121214] ${position} ${cursor}`}
+        title="Tarik untuk mengubah ukuran dan memutar"
+      >
+        <Maximize2 className="w-2 h-2" />
+      </div>
+    );
+  };
+
+  return (
+    <div
+      className={`absolute z-30 group ${!isCapturing ? "cursor-move touch-none" : ""}`}
+      style={{
+        left: `${sticker.xPct}%`,
+        top: `${sticker.yPct}%`,
+        transform: `translate(-50%, -50%) rotate(${sticker.rotation}deg) scale(${sticker.scalePct / 100})`,
+        transformOrigin: "center center",
+      }}
+      onPointerDown={handleDragStart}
+    >
+      <div className={`relative ${!isCapturing ? "group-hover:ring-1 ring-blue-500/50 rounded-sm" : ""}`}>
+        {isEmoji ? (
+          <span className="text-[5cqw] leading-none select-none drop-shadow-md pointer-events-none">
+            {asset.imageUrl}
+          </span>
+        ) : (
+          <img
+            src={asset.imageUrl}
+            alt={asset.name}
+            className="w-[14cqw] h-[14cqw] object-contain drop-shadow-md pointer-events-none"
+            draggable={false}
+          />
+        )}
+
+        {/* Tombol Hapus: Dipindahkan ke atas-tengah agar tidak bentrok dengan tuas sudut */}
+        {!isCapturing && onRemove && (
+          <button
+            type="button"
+            onPointerDown={(e) => e.stopPropagation()} 
+            onClick={() => onRemove(sticker.id)}
+            className="absolute -top-3 left-1/2 -translate-x-1/2 w-4 h-4 rounded-full bg-red-500 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-sm z-50 cursor-pointer"
+            title="Hapus stiker"
+          >
+            <X className="w-2.5 h-2.5" />
+          </button>
+        )}
+
+        {/* 👇 EMPAT TUAS TRANSFORMASI DI SETIAP SUDUT 👇 */}
+        {/* Top-Left */}
+        <TransformHandle position="-top-1.5 -left-1.5" cursor="cursor-nwse-resize" />
+        {/* Top-Right */}
+        <TransformHandle position="-top-1.5 -right-1.5" cursor="cursor-nesw-resize" />
+        {/* Bottom-Right (Original) */}
+        <TransformHandle position="-bottom-1.5 -right-1.5" cursor="cursor-nwse-resize" />
+        {/* Bottom-Left */}
+        <TransformHandle position="-bottom-1.5 -left-1.5" cursor="cursor-nesw-resize" />
+
+      </div>
+    </div>
+  );
+};
+
+// ... sisa komponen PhotoStripProgressCard tidak berubah ...
 export default function PhotoStripProgressCard({
   containerRef,
   capturedPhotos,
@@ -51,51 +207,57 @@ export default function PhotoStripProgressCard({
   activeTemplate,
   getBackgroundStyle,
   getSlotBorderStyle,
-  placedStickers,
-  activeStickerId,
-  setActiveStickerId,
-  handlePointerDown,
-  handlePointerMove,
-  handlePointerUp,
   isCapturing,
   onRetakeSlot,
-  onDeleteSticker,
   onComplete,
   filledPhotosCount,
   config,
+  placedStickers = [],
+  onRemoveSticker,
+  onUpdateSticker,
 }: PhotoStripProgressCardProps) {
+  const allDone = filledPhotosCount === layoutsCount && !isCapturing;
+  const remaining = layoutsCount - filledPhotosCount;
+
   return (
-    <div className="w-full lg:w-[300px] bg-white dark:bg-[#121214] border border-zinc-200/80 dark:border-zinc-800/80 rounded-3xl p-4 flex flex-col items-center justify-between gap-4 shadow-xl transition-colors shrink-0">
-      
-      {/* Results Header */}
-      <div className="w-full text-center pb-2 select-none border-b border-zinc-100 dark:border-zinc-800/50">
-        <h3 className="text-xs font-bold text-zinc-800 dark:text-zinc-200 font-mono tracking-wider uppercase">
-          Hasil Sementara
-        </h3>
-        <p className="text-[9px] text-zinc-400 dark:text-zinc-500 font-mono mt-0.5">
-          Klik foto untuk mengulang
-        </p>
+    <div className="w-full h-full bg-white dark:bg-[#121214] border border-zinc-200 dark:border-zinc-800 rounded-3xl p-3 sm:p-5 flex flex-col items-center justify-between gap-3 sm:gap-4 transition-all relative overflow-hidden">
+
+      <div className="w-full pb-3 border-b border-zinc-100 dark:border-zinc-800/50 select-none flex items-center justify-between shrink-0">
+        <div className="flex flex-col gap-1 text-left">
+          <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 tracking-tight">
+            Pratinjau Cetak
+          </h3>
+          <p className="text-[10px] text-zinc-400 dark:text-zinc-500 font-medium">
+            {remaining > 0 ? `${remaining} foto tersisa` : "Semua foto selesai!"}
+          </p>
+        </div>
+        <div className="flex items-center gap-1.5 shrink-0">
+          {Array.from({ length: layoutsCount }).map((_, i) => (
+            <div
+              key={i}
+              className={`h-1.5 rounded-full transition-all duration-300 ${
+                i < filledPhotosCount
+                  ? "w-4 bg-blue-500"
+                  : "w-1.5 bg-zinc-300 dark:bg-zinc-700"
+              }`}
+            />
+          ))}
+        </div>
       </div>
 
-      {/* WYSIWYG Frame Preview Container */}
-      <div className="w-full flex-1 flex justify-center items-center py-2 relative">
+      <div className="w-full flex-1 flex justify-center items-center relative min-h-0">
         <div
           ref={containerRef}
-          onClick={(e) => {
-            e.stopPropagation();
-            setActiveStickerId(null);
-          }}
-          className="relative overflow-hidden shadow-2xl border border-zinc-200/60 dark:border-zinc-800/60 rounded-xl transition-all duration-300 mx-auto"
+          className="relative overflow-hidden border border-zinc-200/60 dark:border-zinc-800/60 transition-all duration-300 mx-auto"
           style={{
             aspectRatio: `${currentW} / ${currentH}`,
             width: "100%",
-            maxWidth: `min(280px, calc(68vh * (${currentW} / ${currentH})))`,
+            maxWidth: `min(260px, calc(65vh * (${currentW} / ${currentH})))`,
             containerType: "inline-size",
-            borderRadius: isCustomFrame ? "0px" : undefined,
+            borderRadius: isCustomFrame ? "0px" : "12px",
             ...getBackgroundStyle(),
           }}
         >
-          {/* Filmstrip sprocket holes */}
           {frameStyle === "filmstrip" && !isFilmFrame && (
             <>
               <div className="absolute left-1.5 top-0 bottom-0 w-[3.5%] flex flex-col justify-around py-[2%] z-10 pointer-events-none">
@@ -111,7 +273,6 @@ export default function PhotoStripProgressCard({
             </>
           )}
 
-          {/* Photo slots */}
           {slots.map((slot, index) => {
             const isTaken = index < capturedPhotos.length;
             if (!isTaken) {
@@ -124,13 +285,13 @@ export default function PhotoStripProgressCard({
                     top: slot.top,
                     width: slot.width,
                     height: slot.height,
-                    backgroundColor: "#000002",
+                    backgroundColor: "#0a0a0a",
                     overflow: "hidden",
                     ...getSlotBorderStyle(index),
                   }}
-                  className="flex items-center justify-center relative group"
+                  className="flex items-center justify-center"
                 >
-                  <span className="text-[5cqw] font-mono text-zinc-800 dark:text-zinc-700 font-bold select-none">
+                  <span className="text-[8cqw] font-mono text-zinc-700 font-bold select-none opacity-40">
                     {index + 1}
                   </span>
                 </div>
@@ -157,23 +318,21 @@ export default function PhotoStripProgressCard({
                   <img
                     src={capturedPhotos[index]}
                     alt={`Foto ${index + 1}`}
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                     style={{ objectFit: "cover" }}
                   />
                 ) : null}
                 {!isCapturing && (
-                  <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex flex-col items-center justify-center gap-1">
-                    <RefreshCw className="w-4 h-4 text-white animate-spin" style={{ animationDuration: '6s' }} />
-                    <span className="text-[7px] xl:text-[8px] font-mono text-white font-bold tracking-wider uppercase bg-black/60 px-1.5 py-0.5 rounded">
-                      Ulangi Foto
-                    </span>
+                  <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex flex-col items-center justify-center gap-1.5">
+                    <div className="bg-white/15 backdrop-blur-sm rounded-full p-2">
+                      <RefreshCw className="w-3.5 h-3.5 text-white" />
+                    </div>
                   </div>
                 )}
               </button>
             );
           })}
 
-          {/* Transparent PNG overlays */}
           {displayOverlays.map((ov, index) => {
             if (!activeTemplate?.imageOverlay) return null;
             return (
@@ -193,89 +352,46 @@ export default function PhotoStripProgressCard({
             );
           })}
 
-          {/* Placed stickers interactive preview layer */}
-          {placedStickers.map((placed) => {
-            const asset = config.customStickers?.find((s) => s.id === placed.stickerId);
+          {placedStickers.map((ps) => {
+            const asset = config.customStickers?.find((s) => s.id === ps.stickerId);
             if (!asset) return null;
-            const isImg =
-              asset.imageUrl.startsWith("data:") ||
-              asset.imageUrl.includes("/") ||
-              asset.imageUrl.startsWith("http");
-            const isFocused = activeStickerId === placed.id;
-
+            
             return (
-              <div
-                key={placed.id}
-                style={{
-                  position: "absolute",
-                  left: `${placed.xPct}%`,
-                  top: `${placed.yPct}%`,
-                  width: `${placed.scalePct}%`,
-                  transform: `translate(-50%, -50%) rotate(${placed.rotation}deg)`,
-                  cursor: "move",
-                  border: isFocused ? "1.5px dashed #3b82f6" : "none",
-                  touchAction: "none",
-                  zIndex: 30, // Above frames
-                }}
-                onPointerDown={(e) => handlePointerDown(e, placed.id, "drag")}
-                onPointerMove={handlePointerMove}
-                onPointerUp={handlePointerUp}
-                onClick={(e) => e.stopPropagation()}
-              >
-                {/* Sticker Content */}
-                {isImg ? (
-                  <img src={asset.imageUrl} alt={asset.name} className="w-full h-auto pointer-events-none select-none" />
-                ) : (
-                  <span className="text-[12cqw] block text-center leading-none select-none pointer-events-none">{asset.imageUrl}</span>
-                )}
-
-                {/* Resize/Delete Controls */}
-                {isFocused && (
-                  <>
-                    <button
-                      type="button"
-                      onPointerDown={(e) => e.stopPropagation()}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onDeleteSticker && onDeleteSticker(placed.id);
-                        if (activeStickerId === placed.id) setActiveStickerId(null);
-                      }}
-                      className="absolute -top-3 -left-3 w-5 h-5 rounded-full bg-red-500 text-white flex items-center justify-center shadow-md cursor-pointer hover:bg-red-600 border border-white z-[40]"
-                      title="Hapus Stiker"
-                    >
-                      <X className="w-2.5 h-2.5" />
-                    </button>
-                    <div
-                      onPointerDown={(e) => handlePointerDown(e, placed.id, "resize")}
-                      onPointerMove={handlePointerMove}
-                      onPointerUp={handlePointerUp}
-                      className="absolute -bottom-3 -right-3 w-5 h-5 rounded-full bg-blue-500 text-white flex items-center justify-center shadow-md cursor-se-resize hover:bg-blue-600 border border-white z-[40]"
-                      title="Putar & Skala"
-                    >
-                      <span className="text-[9px] font-bold">↺</span>
-                    </div>
-                  </>
-                )}
-              </div>
+              <InteractiveSticker
+                key={ps.id}
+                sticker={ps}
+                asset={asset}
+                containerRef={containerRef}
+                isCapturing={isCapturing}
+                onRemove={onRemoveSticker}
+                onUpdate={onUpdateSticker}
+              />
             );
           })}
+
         </div>
       </div>
 
-      {/* Done / Complete capture button */}
-      <div className="w-full pt-2 border-t border-zinc-100 dark:border-zinc-800/50 flex justify-center min-h-[48px]">
-        {filledPhotosCount === layoutsCount && !isCapturing ? (
-          <Button
+      <div className="w-full flex justify-center min-h-[52px] items-center">
+        {allDone ? (
+          <button
             onClick={onComplete}
-            className="w-full bg-blue-600 hover:bg-blue-500 text-white font-mono text-xs py-3 rounded-lg cursor-pointer transition-all flex items-center justify-center gap-1.5 shadow-md shadow-blue-500/20"
+            className="group w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-500 active:scale-[0.98] text-white font-semibold text-sm py-3.5 rounded-2xl cursor-pointer transition-all duration-200 shadow-lg shadow-blue-500/25"
           >
-            <Check className="w-4 h-4" />
             <span>Lihat Hasil</span>
-          </Button>
+            <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform duration-200" />
+          </button>
         ) : (
-          <span className="text-[10px] text-zinc-400 dark:text-zinc-500 font-mono text-center flex items-center justify-center">
-            Ambil {layoutsCount - filledPhotosCount} foto lagi
-          </span>
+          <div className="flex items-center gap-2 text-zinc-400 dark:text-zinc-500">
+            <div className="flex gap-1">
+              {Array.from({ length: remaining }).map((_, i) => (
+                <div key={i} className="w-1 h-1 rounded-full bg-zinc-300 dark:bg-zinc-700 animate-pulse" style={{ animationDelay: `${i * 150}ms` }} />
+              ))}
+            </div>
+            <span className="text-[10px] font-mono">
+              {remaining} foto lagi
+            </span>
+          </div>
         )}
       </div>
     </div>

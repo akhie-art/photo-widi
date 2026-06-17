@@ -14,13 +14,16 @@ export const getDefaultSlots = (overlay?: string): Array<{ left:string; top:stri
 export default function StripPreview({
   overlay, customSlots, size = "sm",
   overlayX = 0, overlayY = 0, overlayW = 100, overlayH = 100, overlayRotation = 0,
+  paperSize = "2R",
 }: {
   overlay?: string; customSlots?: SlotConfig[]; size?: "sm" | "md" | "lg";
   overlayX?: number; overlayY?: number; overlayW?: number; overlayH?: number; overlayRotation?: number;
+  paperSize?: "2R" | "4R";
 }) {
   const widthMap = { sm: 72, md: 130, lg: 195 };
   const W = widthMap[size];
   const textSz = size === "lg" ? 10 : size === "md" ? 7 : 4.5;
+  const is2R = paperSize === "2R";
 
   const displaySlots: Array<{ left:string; top:string; width:string; height:string; rot?: number; num: number }> =
     customSlots && customSlots.length > 0
@@ -41,7 +44,7 @@ export default function StripPreview({
 
   return (
     <div className="relative overflow-hidden rounded-md shrink-0 select-none shadow-sm border border-zinc-200/50 dark:border-zinc-800/50"
-      style={{ width: W, aspectRatio: "500/1202.5", backgroundColor: "transparent" }}>
+      style={{ width: W, aspectRatio: is2R ? "591/1772" : "1205/1795", backgroundColor: "transparent" }}>
 
       {displaySlots.slice(0,6).map((sl, idx) => (
         <div key={idx} style={{

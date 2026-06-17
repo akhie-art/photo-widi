@@ -12,7 +12,7 @@ import ConfirmDeleteDialog from "@/components/ui/ConfirmDeleteDialog";
 
 interface StickersTabProps {
   config: EventConfig;
-  addStickerAsset: (sticker: Omit<StickerAsset, "id">) => void;
+  addStickerAsset: (sticker: Omit<StickerAsset, "id">) => Promise<boolean>;
   deleteStickerAsset: (id: string) => void;
 }
 
@@ -21,6 +21,8 @@ export default function StickersTab({ config, addStickerAsset, deleteStickerAsse
   const [stickerType, setStickerType] = useState<"emoji" | "image">("emoji");
   const [stickerFormEmoji, setStickerFormEmoji] = useState("");
   const [stickerFormOverlay, setStickerFormOverlay] = useState<string | undefined>(undefined);
+  const [overlayUploading, setOverlayUploading] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   
   // Delete dialog state
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -36,12 +38,13 @@ export default function StickersTab({ config, addStickerAsset, deleteStickerAsse
     }
   };
 
-  const handleStickerSubmit = (e: React.FormEvent) => {
+  const handleStickerSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!stickerFormName.trim()) {
       toast.error("Nama stiker wajib diisi.");
       return;
     }
+    if (isSaving) return;
     
     const imageUrl = stickerType === "image" ? stickerFormOverlay : stickerFormEmoji.trim();
     if (!imageUrl) {
@@ -53,11 +56,17 @@ export default function StickersTab({ config, addStickerAsset, deleteStickerAsse
       return;
     }
     
-    addStickerAsset({ name: stickerFormName.trim(), imageUrl });
-    setStickerFormName("");
-    setStickerFormEmoji("");
-    setStickerFormOverlay(undefined);
-    toast.success("Aset stiker berhasil ditambahkan!");
+    setIsSaving(true);
+    const success = await addStickerAsset({ name: stickerFormName.trim(), imageUrl });
+    setIsSaving(false);
+
+    if (success) {
+      setStickerFormName("");
+      setStickerFormEmoji("");
+      setStickerFormOverlay(undefined);
+      setOverlayUploading(false);
+      toast.success("Aset stiker berhasil ditambahkan!");
+    }
   };
 
   const handleStickerFile = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -71,11 +80,14 @@ export default function StickersTab({ config, addStickerAsset, deleteStickerAsse
       toast.error("Ukuran file maksimal 2MB.");
       return;
     }
+    setOverlayUploading(true);
     const reader = new FileReader();
     reader.onload = ev => {
       setStickerFormOverlay(ev.target?.result as string);
+      setTimeout(() => setOverlayUploading(false), 500);
     };
     reader.readAsDataURL(file);
+    e.target.value = '';
   };
 
   return (
@@ -234,16 +246,31 @@ export default function StickersTab({ config, addStickerAsset, deleteStickerAsse
               <Label className="text-xs font-semibold text-zinc-650 dark:text-zinc-400">Berkas Gambar PNG</Label>
               {stickerFormOverlay ? (
                 <div className="flex items-center gap-3 p-3 bg-zinc-50 dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800 rounded-lg">
-                  <div className="w-12 h-12 rounded bg-white flex items-center justify-center border border-zinc-200/80 overflow-hidden shrink-0">
-                    <img src={stickerFormOverlay} alt="preview" className="w-full h-full object-contain p-1" />
+                  <div className="w-12 h-12 rounded bg-white flex items-center justify-center border border-zinc-200/80 overflow-hidden shrink-0 relative">
+                    {overlayUploading ? (
+                      <div className="absolute inset-0 flex items-center justify-center bg-zinc-100 dark:bg-zinc-800">
+                        <svg className="animate-spin w-4 h-4 text-zinc-400" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+                        </svg>
+                      </div>
+                    ) : (
+                      <img src={stickerFormOverlay} alt="preview" className="w-full h-full object-contain p-1" />
+                    )}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-[11px] font-semibold text-zinc-800 dark:text-zinc-200 truncate">Berkas terpilih</p>
-                    <p className="text-[9px] text-zinc-450 dark:text-zinc-500 font-mono mt-0.5">PNG transparan</p>
+                    {overlayUploading ? (
+                      <p className="text-[11px] font-semibold text-blue-500 dark:text-blue-400 truncate">Membaca gambar...</p>
+                    ) : (
+                      <p className="text-[11px] font-semibold text-green-600 dark:text-green-400 truncate">Berkas terpilih ✓</p>
+                    )}
+                    <p className="text-[9px] text-zinc-450 dark:text-zinc-500 font-mono mt-0.5">
+                      {overlayUploading ? "Memproses..." : "Upload ke bucket otomatis saat Simpan"}
+                    </p>
                   </div>
                   <button 
                     type="button" 
-                    onClick={() => setStickerFormOverlay(undefined)} 
+                    onClick={() => { setStickerFormOverlay(undefined); setOverlayUploading(false); }} 
                     className="p-1.5 text-zinc-400 hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-colors cursor-pointer shrink-0"
                     title="Hapus berkas"
                   >
@@ -256,7 +283,7 @@ export default function StickersTab({ config, addStickerAsset, deleteStickerAsse
                   <ImagePlus className="w-5 h-5 text-zinc-400 group-hover:scale-105 transition-transform" />
                   <div className="text-center">
                     <p className="text-[11px] font-semibold text-zinc-750 dark:text-zinc-300">Pilih berkas PNG</p>
-                    <p className="text-[9px] text-zinc-500 mt-0.5">Format transparan. Maks. 2MB</p>
+                    <p className="text-[9px] text-zinc-500 mt-0.5">Transparan. Maks. 2MB. Disimpan ke bucket.</p>
                   </div>
                 </label>
               )}
@@ -265,9 +292,18 @@ export default function StickersTab({ config, addStickerAsset, deleteStickerAsse
 
           <Button 
             type="submit" 
-            className="w-full bg-zinc-900 hover:bg-zinc-800 text-white dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-200 h-10 rounded-lg mt-3 font-semibold text-xs tracking-wider uppercase border-none cursor-pointer active:scale-98 transition-all shadow-sm"
+            disabled={isSaving || overlayUploading}
+            className="w-full bg-zinc-900 hover:bg-zinc-800 text-white dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-200 h-10 rounded-lg mt-3 font-semibold text-xs tracking-wider uppercase border-none cursor-pointer active:scale-98 transition-all shadow-sm flex items-center justify-center gap-2"
           >
-            Simpan Stiker
+            {isSaving ? (
+              <>
+                <svg className="animate-spin h-4 w-4 text-white dark:text-zinc-900" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
+                </svg>
+                Menyimpan...
+              </>
+            ) : "Simpan Stiker"}
           </Button>
         </form>
       </div>

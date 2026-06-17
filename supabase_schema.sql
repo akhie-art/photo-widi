@@ -55,7 +55,6 @@ create table if not exists sticker_assets (
 --   • force_layout: jika true, pilihan layout manual dikunci.
 create table if not exists preset_templates (
   id               text primary key,
-  name             text not null,
   image_overlay    text,
   custom_slots     jsonb,
   overlay_x        numeric default 0,
@@ -64,6 +63,7 @@ create table if not exists preset_templates (
   overlay_h        numeric default 100,
   overlay_rotation numeric default 0,
   force_layout     boolean default true,
+  paper_size       text default '2R',
   created_at       timestamptz default now(),
   updated_at       timestamptz default now()
 );
@@ -72,6 +72,16 @@ drop trigger if exists trg_preset_templates_updated_at on preset_templates;
 create trigger trg_preset_templates_updated_at
   before update on preset_templates
   for each row execute function update_updated_at_column();
+
+-- Pastikan kolom layout overlay dan konfigurasi tambahan ditambahkan jika tabel preset_templates sudah ada sebelumnya
+alter table preset_templates drop column if exists name;
+alter table preset_templates add column if not exists overlay_x numeric default 0;
+alter table preset_templates add column if not exists overlay_y numeric default 0;
+alter table preset_templates add column if not exists overlay_w numeric default 100;
+alter table preset_templates add column if not exists overlay_h numeric default 100;
+alter table preset_templates add column if not exists overlay_rotation numeric default 0;
+alter table preset_templates add column if not exists force_layout boolean default true;
+alter table preset_templates add column if not exists paper_size text default '2R';
 
 -- ── 7. Tabel foto strip tamu ─────────────────────────────────────────────────
 --   Catatan: operator_name ditambahkan — digunakan oleh addPhoto() di store.
@@ -356,6 +366,82 @@ create policy "Delete Access for Photostrips" on storage.objects
   for delete using (bucket_id = 'photostrips');
 
 
+-- ── 9b. Setup Supabase Storage Bucket 'preset-overlays' ──────────────────────
+-- Bucket khusus untuk menyimpan gambar overlay template preset
+-- Kolom image_overlay di preset_templates hanya menyimpan URL publik dari bucket ini
+insert into storage.buckets (id, name, public)
+values ('preset-overlays', 'preset-overlays', true)
+on conflict (id) do nothing;
+
+-- Kebijakan RLS untuk bucket preset-overlays
+drop policy if exists "Public Access for Preset Overlays" on storage.objects;
+create policy "Public Access for Preset Overlays" on storage.objects
+  for select using (bucket_id = 'preset-overlays');
+
+drop policy if exists "Insert Access for Preset Overlays" on storage.objects;
+create policy "Insert Access for Preset Overlays" on storage.objects
+  for insert with check (bucket_id = 'preset-overlays');
+
+drop policy if exists "Update Access for Preset Overlays" on storage.objects;
+create policy "Update Access for Preset Overlays" on storage.objects
+  for update using (bucket_id = 'preset-overlays');
+
+drop policy if exists "Delete Access for Preset Overlays" on storage.objects;
+create policy "Delete Access for Preset Overlays" on storage.objects
+  for delete using (bucket_id = 'preset-overlays');
+
+
+-- ── 9c. Setup Supabase Storage Bucket 'sticker-assets' ───────────────────────
+-- Bucket khusus untuk menyimpan gambar stiker PNG transparan
+-- Kolom image_url di sticker_assets hanya menyimpan URL publik dari bucket ini
+-- Stiker teks emoji tidak menggunakan bucket ini (disimpan langsung sebagai teks)
+insert into storage.buckets (id, name, public)
+values ('sticker-assets', 'sticker-assets', true)
+on conflict (id) do nothing;
+
+-- Kebijakan RLS untuk bucket sticker-assets
+drop policy if exists "Public Access for Sticker Assets" on storage.objects;
+create policy "Public Access for Sticker Assets" on storage.objects
+  for select using (bucket_id = 'sticker-assets');
+
+drop policy if exists "Insert Access for Sticker Assets" on storage.objects;
+create policy "Insert Access for Sticker Assets" on storage.objects
+  for insert with check (bucket_id = 'sticker-assets');
+
+drop policy if exists "Update Access for Sticker Assets" on storage.objects;
+create policy "Update Access for Sticker Assets" on storage.objects
+  for update using (bucket_id = 'sticker-assets');
+
+drop policy if exists "Delete Access for Sticker Assets" on storage.objects;
+create policy "Delete Access for Sticker Assets" on storage.objects
+  for delete using (bucket_id = 'sticker-assets');
+
+
+-- ── 9d. Setup Supabase Storage Bucket 'event-assets' ─────────────────────────
+-- Bucket khusus untuk menyimpan logo event, QRIS, atau aset dekorasi event lainnya
+-- Kolom logoUrl di config_json menyimpan URL publik dari bucket ini
+insert into storage.buckets (id, name, public)
+values ('event-assets', 'event-assets', true)
+on conflict (id) do nothing;
+
+-- Kebijakan RLS untuk bucket event-assets
+drop policy if exists "Public Access for Event Assets" on storage.objects;
+create policy "Public Access for Event Assets" on storage.objects
+  for select using (bucket_id = 'event-assets');
+
+drop policy if exists "Insert Access for Event Assets" on storage.objects;
+create policy "Insert Access for Event Assets" on storage.objects
+  for insert with check (bucket_id = 'event-assets');
+
+drop policy if exists "Update Access for Event Assets" on storage.objects;
+create policy "Update Access for Event Assets" on storage.objects
+  for update using (bucket_id = 'event-assets');
+
+drop policy if exists "Delete Access for Event Assets" on storage.objects;
+create policy "Delete Access for Event Assets" on storage.objects
+  for delete using (bucket_id = 'event-assets');
+
+
 -- ── 10. Fungsi RPC untuk Manajemen Operator dari Admin Panel ──────────────────
 -- Jalankan fungsi ini untuk mengizinkan Admin CRUD akun Operator
 
@@ -552,3 +638,25 @@ begin
     alter publication supabase_realtime add table photo_strips;
   end if;
 end $$;
+
+
+-- ── 11. Fungsi RPC get_bucket_size untuk Storage Usage ────────────────────────
+-- Fungsi ini menjumlahkan ukuran file di dalam bucket tertentu menggunakan data metadata.
+-- Menggunakan 'security definer' agar dapat diakses oleh anon/authenticated role.
+
+create or replace function get_bucket_size(p_bucket_id text)
+returns bigint
+security definer
+as $$
+declare
+  v_size bigint;
+begin
+  select sum((metadata->>'size')::bigint)
+  into v_size
+  from storage.objects
+  where bucket_id = p_bucket_id;
+  
+  return coalesce(v_size, 0);
+end;
+$$ language plpgsql;
+

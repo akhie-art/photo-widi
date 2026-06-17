@@ -1,8 +1,8 @@
 "use client";
 
 import React from "react";
-import { Sparkles, Sliders, Smile, Trash2 } from "lucide-react";
-import { EventConfig, PresetTemplate, PlacedSticker } from "../../hooks/usePhotoboothStore";
+import { Sparkles, Sliders, Smile, Plus } from "lucide-react";
+import { EventConfig, PresetTemplate, StickerAsset } from "../../hooks/usePhotoboothStore";
 
 export interface FilterItem {
   id: string;
@@ -18,11 +18,9 @@ interface ConfigSelectorCardProps {
   activeFrameId: string;
   activeFilter: FilterItem;
   activeFiltersList: FilterItem[];
-  placedStickers: PlacedSticker[];
   onSelectPreset?: (preset: PresetTemplate) => void;
   onSelectFilter?: (filter: FilterItem) => void;
-  onAddSticker?: (stickerId: string) => void;
-  onClearStickers?: () => void;
+  onAddSticker?: (sticker: StickerAsset) => void;
 }
 
 export default function ConfigSelectorCard({
@@ -33,15 +31,15 @@ export default function ConfigSelectorCard({
   activeFrameId,
   activeFilter,
   activeFiltersList,
-  placedStickers,
   onSelectPreset,
   onSelectFilter,
   onAddSticker,
-  onClearStickers,
 }: ConfigSelectorCardProps) {
+  const stickerList: StickerAsset[] = config.customStickers ?? [];
+
   return (
     <div
-      className={`w-full lg:w-[320px] bg-white dark:bg-zinc-950 ring-1 ring-inset ring-zinc-200/60 dark:ring-zinc-800/60 rounded-2xl p-4 flex flex-col gap-4 shadow-[0_8px_30px_rgb(0,0,0,0.04)] transition-all duration-300 shrink-0 ${
+      className={`w-full h-full bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-3 sm:p-4 flex flex-col gap-3 sm:gap-4 transition-all duration-300 ${
         isCapturing ? "opacity-50 pointer-events-none select-none grayscale-[20%]" : ""
       }`}
     >
@@ -60,63 +58,55 @@ export default function ConfigSelectorCard({
         <button
           type="button"
           onClick={() => setActiveTab("frame")}
-          className={`flex-1 flex items-center justify-center gap-2 py-1.5 px-2 rounded-lg text-xs font-medium transition-all ${
+          className={`flex-1 flex items-center justify-center gap-1 py-1.5 px-1 rounded-lg text-[10px] sm:text-xs font-medium transition-all ${
             activeTab === "frame"
               ? "bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 shadow-sm ring-1 ring-zinc-200/50 dark:ring-zinc-700/50"
               : "text-zinc-500 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-200/50 dark:hover:bg-zinc-800/50"
           }`}
         >
-          <Sparkles className="w-3.5 h-3.5" />
+          <Sparkles className="w-3 h-3 shrink-0" />
           <span>Bingkai</span>
         </button>
 
         <button
           type="button"
           onClick={() => setActiveTab("filter")}
-          className={`flex-1 flex items-center justify-center gap-2 py-1.5 px-2 rounded-lg text-xs font-medium transition-all ${
+          className={`flex-1 flex items-center justify-center gap-1 py-1.5 px-1 rounded-lg text-[10px] sm:text-xs font-medium transition-all ${
             activeTab === "filter"
               ? "bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 shadow-sm ring-1 ring-zinc-200/50 dark:ring-zinc-700/50"
               : "text-zinc-500 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-200/50 dark:hover:bg-zinc-800/50"
           }`}
         >
-          <Sliders className="w-3.5 h-3.5" />
+          <Sliders className="w-3 h-3 shrink-0" />
           <span>Filter</span>
         </button>
 
         <button
           type="button"
           onClick={() => setActiveTab("sticker")}
-          className={`flex-1 flex items-center justify-center gap-2 py-1.5 px-2 rounded-lg text-xs font-medium transition-all ${
+          className={`flex-1 flex items-center justify-center gap-1 py-1.5 px-1 rounded-lg text-[10px] sm:text-xs font-medium transition-all ${
             activeTab === "sticker"
               ? "bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 shadow-sm ring-1 ring-zinc-200/50 dark:ring-zinc-700/50"
               : "text-zinc-500 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-200/50 dark:hover:bg-zinc-800/50"
           }`}
         >
-          <Smile className="w-3.5 h-3.5" />
+          <Smile className="w-3 h-3 shrink-0" />
           <span>Stiker</span>
-          {placedStickers.length > 0 && (
-            <span className="w-4 h-4 rounded-full flex items-center justify-center text-[10px] font-semibold bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900">
-              {placedStickers.length}
-            </span>
-          )}
         </button>
       </div>
 
       {/* Scrollable Content Area */}
-      <div className="flex-1 overflow-y-auto max-h-[350px] lg:max-h-[480px] scrollbar-thin scrollbar-thumb-zinc-200 dark:scrollbar-thumb-zinc-800 pr-2 select-none">
+      <div className="flex-1 overflow-y-auto max-h-[240px] md:max-h-[min(30vh,350px)] lg:max-h-[min(48vh,480px)] scrollbar-thin scrollbar-thumb-zinc-200 dark:scrollbar-thumb-zinc-800 pr-1 select-none">
         
         {/* TAB: BINGKAI (FRAME) */}
         {activeTab === "frame" && (
           <div className="animate-fade-in duration-200">
             {config.presetTemplates?.length ? (
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 portrait:sm:grid-cols-3 portrait:md:grid-cols-4 portrait:lg:grid-cols-6 portrait:xl:grid-cols-8 landscape:grid-cols-2 gap-3">
                 {(config.presetTemplates || [])
                   .filter((item) => item && item.id)
                   .map((item) => {
                     const isActive = activeFrameId === item.id;
-                    
-                    // Fallback properti gambar agar sesuai dengan data asli dari config
-                    // Mencari thumbnailUrl, previewUrl, frameUrl, dll.
                     const previewImage = (item as any).thumbnailUrl || (item as any).previewUrl || item.imageOverlay || (item as any).frameUrl || (item as any).backgroundUrl;
                     
                     return (
@@ -130,9 +120,6 @@ export default function ConfigSelectorCard({
                             : "bg-white dark:bg-zinc-950 ring-1 ring-inset ring-zinc-200/80 dark:ring-zinc-800/80 hover:ring-zinc-300 dark:hover:ring-zinc-700 hover:shadow-sm"
                         }`}
                       >
-                        {/* Perbaikan utama: Menghapus hardcode aspect-[2/3] dan menggantinya dengan h-[160px].
-                          Ini akan membuat template grid atau strip tampil sesuai proporsi aslinya berkat object-contain.
-                        */}
                         <div className={`relative w-full h-[160px] rounded-xl overflow-hidden flex items-center justify-center p-2 mb-2 transition-colors ${
                            isActive ? "bg-white dark:bg-zinc-900 shadow-sm" : "bg-zinc-50 dark:bg-zinc-900/40"
                         }`}>
@@ -145,17 +132,6 @@ export default function ConfigSelectorCard({
                           ) : (
                             <span className="text-[10px] font-bold text-zinc-400">
                               PRESET
-                            </span>
-                          )}
-                        </div>
-                        <div className="flex flex-col items-center justify-center px-1 pb-1">
-                          <span className={`text-xs font-semibold truncate w-full text-center ${isActive ? "text-blue-700 dark:text-blue-400" : "text-zinc-800 dark:text-zinc-200"}`}>
-                            {item.name}
-                          </span>
-                          {/* Opsional: Menampilkan tipe layout jika ada (misal: Strip, Grid) */}
-                          {(item as any).layout && (
-                            <span className="text-[9px] text-zinc-400 uppercase tracking-wider mt-0.5">
-                              {(item as any).layout}
                             </span>
                           )}
                         </div>
@@ -173,7 +149,7 @@ export default function ConfigSelectorCard({
         {activeTab === "filter" && (
           <div className="animate-fade-in duration-200">
             {activeFiltersList && activeFiltersList.length > 0 ? (
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 portrait:sm:grid-cols-3 portrait:md:grid-cols-4 portrait:lg:grid-cols-6 portrait:xl:grid-cols-8 landscape:grid-cols-2 gap-3">
                 {activeFiltersList.map((filter) => {
                   const isActive = activeFilter.id === filter.id;
                   
@@ -212,71 +188,67 @@ export default function ConfigSelectorCard({
           </div>
         )}
 
-        {/* TAB: STIKER (STICKER) */}
+        {/* TAB: STIKER */}
         {activeTab === "sticker" && (
-          <div className="animate-fade-in duration-200 flex flex-col gap-3">
-            {placedStickers.length > 0 && (
-              <div className="flex justify-end px-1">
-                <button
-                  type="button"
-                  onClick={onClearStickers}
-                  className="flex items-center gap-1.5 text-[11px] font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 px-2.5 py-1 rounded-md transition-colors"
-                >
-                  <Trash2 className="w-3 h-3" />
-                  Hapus Semua
-                </button>
-              </div>
-            )}
-            
-            {config.customStickers && config.customStickers.length > 0 ? (
-              <div className="grid grid-cols-3 gap-3">
-                {config.customStickers.map((sticker) => {
-                  const isImg = sticker.imageUrl.startsWith("data:") || sticker.imageUrl.includes("/") || sticker.imageUrl.startsWith("http");
-                  
-                  return (
-                    <button
-                      key={sticker.id}
-                      type="button"
-                      onClick={() => onAddSticker && onAddSticker(sticker.id)}
-                      className="group flex flex-col p-2 rounded-2xl bg-white dark:bg-zinc-950 ring-1 ring-inset ring-zinc-200/80 dark:ring-zinc-800/80 hover:ring-zinc-300 dark:hover:ring-zinc-700 transition-all hover:shadow-sm active:scale-[0.96] outline-none"
-                    >
-                      <div className="relative w-full aspect-square rounded-xl overflow-hidden flex items-center justify-center p-2 mb-1.5 bg-zinc-50 dark:bg-zinc-900/40 transition-colors group-hover:bg-zinc-100 dark:group-hover:bg-zinc-900/60">
-                        {isImg ? (
-                          <img
-                            src={sticker.imageUrl}
-                            alt={sticker.name}
-                            className="max-w-full max-h-full object-contain drop-shadow-sm group-hover:scale-110 group-hover:rotate-3 transition-transform duration-300"
-                          />
-                        ) : (
-                          <span className="text-3xl pointer-events-none group-hover:scale-110 transition-transform duration-300">
-                            {sticker.imageUrl}
-                          </span>
-                        )}
-                      </div>
-                      
-                      <div className="flex flex-col text-center px-1 pb-1">
-                        <span className="text-[10px] font-semibold text-zinc-700 dark:text-zinc-300 group-hover:text-zinc-900 dark:group-hover:text-zinc-100 truncate w-full">
-                          {sticker.name}
+          <div className="animate-fade-in duration-200">
+            {stickerList.length > 0 ? (
+              <div className="grid grid-cols-3 landscape:grid-cols-3 portrait:sm:grid-cols-4 gap-2">
+                {stickerList.map((sticker) => (
+                  <div
+                    key={sticker.id}
+                    className="group flex flex-col rounded-xl overflow-hidden bg-white dark:bg-zinc-950 ring-1 ring-inset ring-zinc-200/80 dark:ring-zinc-800/80 hover:ring-blue-400/70 dark:hover:ring-blue-500/50 transition-all"
+                  >
+                    {/* Sticker preview area */}
+                    <div className="relative flex-1 flex items-center justify-center p-2 bg-zinc-50/80 dark:bg-zinc-900/40 aspect-square">
+                      {sticker.imageUrl.startsWith("data:") || sticker.imageUrl.startsWith("http") || sticker.imageUrl.startsWith("/") ? (
+                        <img
+                          src={sticker.imageUrl}
+                          alt={sticker.name}
+                          className="w-full h-full object-contain drop-shadow-sm group-hover:scale-105 transition-transform duration-200"
+                          draggable={false}
+                        />
+                      ) : (
+                        <span className="text-3xl leading-none select-none group-hover:scale-105 transition-transform duration-200">
+                          {sticker.imageUrl}
                         </span>
-                        <span className="text-[8px] text-zinc-400 mt-0.5">Klik utk tambah</span>
-                      </div>
-                    </button>
-                  );
-                })}
+                      )}
+                    </div>
+
+                    {/* Bottom: name + add button */}
+                    <div className="flex items-center justify-between px-2 py-1.5 border-t border-zinc-100 dark:border-zinc-800/60 shrink-0">
+                      <span className="text-[9px] font-semibold text-zinc-500 dark:text-zinc-400 truncate leading-none">
+                        {sticker.name}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => onAddSticker && onAddSticker(sticker)}
+                        title={`Tambah ${sticker.name}`}
+                        className="shrink-0 ml-1 flex items-center justify-center w-5 h-5 rounded-md bg-blue-500 hover:bg-blue-600 active:scale-90 text-white transition-all shadow-sm shadow-blue-500/30"
+                      >
+                        <Plus className="w-3 h-3" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
               </div>
             ) : (
-              <EmptyState message="Belum ada stiker untuk tema ini." />
+              <EmptyState
+                icon={<Smile className="w-6 h-6 text-zinc-400 mb-1" />}
+                message="Belum ada stiker. Tambahkan stiker di Admin Panel."
+              />
             )}
           </div>
         )}
+
       </div>
     </div>
   );
 }
 
-function EmptyState({ message }: { message: string }) {
+function EmptyState({ message, icon }: { message: string; icon?: React.ReactNode }) {
   return (
     <div className="w-full flex flex-col items-center justify-center py-10 px-4 ring-1 ring-inset ring-zinc-200 dark:ring-zinc-800 border-dashed rounded-xl bg-zinc-50/50 dark:bg-zinc-900/20">
+      {icon}
       <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400 text-center">
         {message}
       </p>

@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { usePhotoboothStore, PhotoStrip } from "@/app/hooks/usePhotoboothStore";
 import { useRouter } from "next/navigation";
+import { supabase } from "@/lib/supabase";
 import { 
   Sun, 
   Moon, 
@@ -103,7 +104,12 @@ export default function LandingPage() {
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
-  const handleOperatorLogout = () => {
+  const handleOperatorLogout = async () => {
+    try {
+      await supabase.auth.signOut();
+    } catch (err) {
+      console.error("Sign out error:", err);
+    }
     sessionStorage.removeItem("glow_operator_auth");
     sessionStorage.removeItem("glow_operator_name");
     setCurrentOperator(null);

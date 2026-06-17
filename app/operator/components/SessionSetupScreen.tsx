@@ -48,9 +48,12 @@ function SlotPreviewMini({ preset, slotCount, style = "neon" }: { preset?: Prese
       }))
     : autoSlots;
 
+  const is2R = preset?.paperSize === "2R";
+  const aspectRatio = is2R ? "591/1772" : "1205/1795";
+
   return (
     <div className="relative overflow-hidden rounded-md shrink-0 shadow-xl shadow-black/20 border border-zinc-800/30"
-      style={{ width: 64, aspectRatio: "500/1202.5", borderRadius: preset?.imageOverlay ? "0px" : undefined, ...bgCSS }}>
+      style={{ width: 64, aspectRatio, borderRadius: preset?.imageOverlay ? "0px" : undefined, ...bgCSS }}>
       {displaySlots.slice(0, 8).map((sl, i) => (
         <div key={i} style={{
           position: "absolute",
@@ -92,7 +95,7 @@ function SlotPreviewLarge({
   if (preset) {
     if (preset.id.includes("grid")) {
       layoutId = "grid";
-    } else if (preset.id.includes("polaroid") || (preset.customSlots && preset.customSlots.length === 1)) {
+    } else if (preset.id.includes("polaroid") || preset.customSlots) {
       layoutId = "polaroid";
     }
   }
@@ -357,56 +360,46 @@ function SlotPreviewLarge({
       }] : [];
     }
   } else {
-    // polaroid
-    w = 600;
-    const padding = 35;
-    const photoW = w - padding * 2; // 530px
-    const photoH = photoW;
-    const footerH = 140;
+    // polaroid/custom layouts
+    if (preset) {
+      const is2R = preset.paperSize === "2R";
+      w = is2R ? 591 : 1205;
+      h = is2R ? 1772 : 1795;
+      const scaleX = w / 500;
+      const scaleY = h / 1202.5;
 
-    const overlayH = preset?.overlayH ?? 100;
+      const slots = (preset.customSlots && preset.customSlots.length > 0)
+        ? preset.customSlots
+        : [{ id: "default_0", xPct: 5, yPct: 5, widthPct: 90, heightPct: 90, rotation: 0 }];
 
-    if (isCustomFrame) {
-      const scaleX = photoW / 500; // 1.06
-      const tileH = (overlayH / 100) * 1202.5 * scaleX;
-      h = padding + tileH + padding;
-    } else {
-      h = padding + photoH + footerH + padding;
-    }
+      const overlayX = preset.overlayX ?? 0;
+      const overlayY = preset.overlayY ?? 0;
+      const overlayW = preset.overlayW ?? 100;
+      const overlayH = preset.overlayH ?? 100;
 
-    if (isCustomFrame) {
-      const slot = (preset?.customSlots && preset.customSlots.length > 0)
-        ? preset.customSlots[0]
-        : { xPct: 5, yPct: 5, widthPct: 90, heightPct: 90, rotation: 0 };
+      const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
+      const sortedSlots = [...slots].sort((a, b) => collator.compare(a.id, b.id));
 
-      const overlayX = preset?.overlayX ?? 0;
-      const overlayY = preset?.overlayY ?? 0;
-      const overlayW = preset?.overlayW ?? 100;
+      displaySlots = sortedSlots.map(s => {
+        const sw = (s.widthPct / 100) * 500 * scaleX;
+        const sh = (s.heightPct / 100) * 1202.5 * scaleY;
+        const sx = (s.xPct / 100) * 500 * scaleX;
+        const sy = (s.yPct / 100) * 1202.5 * scaleY;
 
-      const scaleX = photoW / 500;
-      const scaleY = scaleX;
+        return {
+          left: `${(sx / w) * 100}%`,
+          top: `${(sy / h) * 100}%`,
+          width: `${(sw / w) * 100}%`,
+          height: `${(sh / h) * 100}%`,
+          rotation: s.rotation || 0,
+        };
+      });
 
-      const tileH = (overlayH / 100) * 1202.5 * scaleY;
-
-      const sw = (slot.widthPct / 100) * 500 * scaleX;
-      const sh = (slot.heightPct / 100) * 1202.5 * scaleY;
-
-      const sx = padding + (slot.xPct / 100) * 500 * scaleX;
-      const sy = padding + (slot.yPct / 100) * 1202.5 * scaleY;
-
-      displaySlots = [{
-        left: `${(sx / w) * 100}%`,
-        top: `${(sy / h) * 100}%`,
-        width: `${(sw / w) * 100}%`,
-        height: `${(sh / h) * 100}%`,
-        rotation: slot.rotation || 0,
-      }];
-
-      if (preset?.imageOverlay) {
+      if (preset.imageOverlay) {
         const ow = (overlayW / 100) * 500 * scaleX;
-        const oh = tileH;
-        const ox = padding + (overlayX / 100) * 500 * scaleX;
-        const oy = padding + (overlayY / 100) * 1202.5 * scaleY;
+        const oh = (overlayH / 100) * 1202.5 * scaleY;
+        const ox = (overlayX / 100) * 500 * scaleX;
+        const oy = (overlayY / 100) * 1202.5 * scaleY;
 
         displayOverlays = [{
           left: `${(ox / w) * 100}%`,
@@ -417,6 +410,13 @@ function SlotPreviewLarge({
         }];
       }
     } else {
+      w = 600;
+      const padding = 35;
+      const photoW = w - padding * 2;
+      const photoH = photoW;
+      const footerH = 140;
+      h = padding + photoH + footerH + padding;
+
       displaySlots = [{
         left: `${(padding / w) * 100}%`,
         top: `${(padding / h) * 100}%`,
@@ -424,14 +424,7 @@ function SlotPreviewLarge({
         height: `${(photoH / h) * 100}%`,
         rotation: 0,
       }];
-
-      displayOverlays = preset?.imageOverlay ? [{
-        left: `${preset.overlayX ?? 0}%`,
-        top: `${preset.overlayY ?? 0}%`,
-        width: `${preset.overlayW ?? 100}%`,
-        height: `${preset.overlayH ?? 100}%`,
-        rotation: preset.overlayRotation ?? 0,
-      }] : [];
+      displayOverlays = [];
     }
   }
 
@@ -449,7 +442,7 @@ function SlotPreviewLarge({
 
       {/* Render fisik strip */}
       <div className="relative overflow-hidden rounded-2xl shadow-[0_25px_60px_rgba(0,0,0,0.25)] border border-slate-100 dark:border-slate-800/60 transition-all duration-500 scale-95 md:scale-100 z-10 my-6"
-        style={{ width: layoutId === "polaroid" ? 220 : (layoutId === "grid" ? 235 : 170), aspectRatio, borderRadius: isCustomFrame ? "0px" : undefined, ...bgCSS }}>
+        style={{ width: layoutId === "polaroid" ? 220 : (layoutId === "grid" ? 235 : 170), aspectRatio, borderRadius: preset ? "0px" : undefined, ...(preset ? { backgroundColor: "transparent", background: "transparent" } : bgCSS) }}>
         
         {/* Lubang filmstrip jika temanya filmstrip */}
         {style === "filmstrip" && (
@@ -572,13 +565,9 @@ export default function SessionSetupScreen({
         {/* ── HEADER ── */}
         <header className="flex items-center justify-between pb-6 border-b border-rose-100/60 dark:border-slate-800/80 shrink-0">
           <div className="flex items-center gap-4">
-            {config.logoUrl ? (
+            {config.logoUrl && (
               <div className="w-10 h-10 rounded-xl overflow-hidden bg-zinc-50 dark:bg-zinc-950 flex items-center justify-center border border-rose-100/30 dark:border-slate-800 shrink-0">
                 <img src={config.logoUrl} alt="Logo" className="w-full h-full object-contain" />
-              </div>
-            ) : (
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-rose-400 to-orange-300 flex items-center justify-center text-white font-bold tracking-tighter text-sm shadow-md shadow-rose-200 dark:shadow-none hover:scale-105 transition-transform">
-                GB
               </div>
             )}
             <div className="flex flex-col">

@@ -17,7 +17,7 @@ export async function renderPhotoStrip({
     config.presetTemplates?.find((p) => p.id === config.activePresetTemplateId) ||
     config.presetTemplates?.[0];
 
-  const isCustomFrame = !!(activeTemplate && (!activeTemplate.customSlots || activeTemplate.customSlots.length <= 1));
+  const isCustomFrame = !!activeTemplate;
 
   return new Promise((resolve, reject) => {
     // Load all photos as HTMLImageElements first
@@ -204,46 +204,6 @@ export async function renderPhotoStrip({
                 ctx.restore();
               }
             });
-          } else if (activeTemplate?.customSlots && activeTemplate.customSlots.length > 1) {
-            const collatorR = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
-            const slots = [...activeTemplate.customSlots].sort((a, b) => collatorR.compare(a.id, b.id));
-            slots.forEach((slot, i) => {
-              const img = loadedImages[i];
-              if (!img) return;
-
-              const drawX = slot.xPct / 100 * w;
-              const drawY = slot.yPct / 100 * totalH;
-              const drawW = slot.widthPct / 100 * w;
-              const drawH = slot.heightPct / 100 * totalH;
-              const cx = drawX + drawW / 2;
-              const cy = drawY + drawH / 2;
-              const angle = (slot.rotation || 0) * Math.PI / 180;
-
-              ctx.save();
-              ctx.translate(cx, cy);
-              ctx.rotate(angle);
-
-              // Clip to slot rectangle
-              ctx.beginPath();
-              ctx.rect(-drawW / 2, -drawH / 2, drawW, drawH);
-              ctx.clip();
-
-              // Cover-fit the photo
-              const imgAspect = img.width / img.height;
-              const slotAspect = drawW / drawH;
-              let sx = 0, sy = 0, sw = img.width, sh = img.height;
-              if (imgAspect > slotAspect) {
-                sw = img.height * slotAspect;
-                sx = (img.width - sw) / 2;
-              } else {
-                sh = img.width / slotAspect;
-                sy = (img.height - sh) / 2;
-              }
-
-              ctx.drawImage(img, sx, sy, sw, sh, -drawW / 2, -drawH / 2, drawW, drawH);
-              ctx.restore();
-            });
-
           } else if (isFilmFrame) {
             const slotWidthPct = 0.3037;
             const slotLeftPct = 0.3477;
@@ -411,22 +371,32 @@ export async function renderPhotoStrip({
           }
 
         } else {
-          // Polaroid single: 600px width, 1 square photo
-          const w = 600;
-          const padding = 35;
-          const photoW = w - padding * 2; // 530px
-          const photoH = photoW; // 1:1 square
-          const footerH = 140;
-
-          const overlayH = activeTemplate?.overlayH ?? 100;
-
+          // Polaroid/Custom 4R layout
+          let padding = 35;
+          let w = 600;
           let totalH = 0;
+          let scaleX = 1;
+          let scaleY = 1;
+          const overlayH = activeTemplate?.overlayH ?? 100;
+          let photoW = 0;
+          let photoH = 0;
+          let footerH = 0;
+
           if (isCustomFrame) {
-            const scaleX = photoW / 500; // 1.06
-            const tileH = (overlayH / 100) * 1202.5 * scaleX;
-            totalH = padding + tileH + padding;
+            padding = 0;
+            const is2R = activeTemplate.paperSize === "2R";
+            w = is2R ? 591 : 1205;
+            totalH = is2R ? 1772 : 1795;
+            scaleX = w / 500;
+            scaleY = totalH / 1202.5;
           } else {
+            w = 600;
+            photoW = w - padding * 2;
+            photoH = photoW;
+            footerH = 140;
             totalH = padding + photoH + footerH + padding;
+            scaleX = photoW / 500;
+            scaleY = scaleX;
           }
 
           canvas.width = w;
@@ -435,34 +405,25 @@ export async function renderPhotoStrip({
           drawBackground(ctx, w, totalH, frameStyle, !!activeTemplate?.imageOverlay);
 
           if (isCustomFrame) {
-            const slot = (activeTemplate?.customSlots && activeTemplate.customSlots.length > 0)
-              ? activeTemplate.customSlots[0]
-              : { xPct: 5, yPct: 5, widthPct: 90, heightPct: 90, rotation: 0 };
+            const slots = (activeTemplate?.customSlots && activeTemplate.customSlots.length > 0)
+              ? activeTemplate.customSlots
+              : [{ id: "default_0", xPct: 5, yPct: 5, widthPct: 90, heightPct: 90, rotation: 0 }];
 
-            const overlayX = activeTemplate?.overlayX ?? 0;
-            const overlayY = activeTemplate?.overlayY ?? 0;
-            const overlayW = activeTemplate?.overlayW ?? 100;
+            const collatorR = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
+            const sortedSlots = [...slots].sort((a, b) => collatorR.compare(a.id, b.id));
 
-            const scaleX = photoW / 500;
-            const scaleY = scaleX;
+            sortedSlots.forEach((slot, i) => {
+              const img = loadedImages[i];
+              if (!img) return;
 
-            const tileH = (overlayH / 100) * 1202.5 * scaleY;
-
-            if (loadedImages[0]) {
-              const img = loadedImages[0];
               const sw = (slot.widthPct / 100) * 500 * scaleX;
               const sh = (slot.heightPct / 100) * 1202.5 * scaleY;
-              const ow = (overlayW / 100) * 500 * scaleX;
-              const oh = tileH;
-
               const sx = padding + (slot.xPct / 100) * 500 * scaleX;
               const sy = padding + (slot.yPct / 100) * 1202.5 * scaleY;
-              const ox = padding + (overlayX / 100) * 500 * scaleX;
-              const oy = padding + (overlayY / 100) * 1202.5 * scaleY;
               const angle = ((slot.rotation || 0) * Math.PI) / 180;
 
               if (!loadedOverlayImg) {
-                drawPhotoContainer(ctx, img, sx, sy, sw, sh, frameStyle, 0);
+                drawPhotoContainer(ctx, img, sx, sy, sw, sh, frameStyle, i);
               } else {
                 ctx.save();
                 const cx = sx + sw / 2;
@@ -486,15 +447,25 @@ export async function renderPhotoStrip({
                 ctx.drawImage(img, sx_crop, sy_crop, sw_crop, sh_crop, -sw / 2, -sh / 2, sw, sh);
                 ctx.restore();
               }
+            });
 
-              if (loadedOverlayImg) {
-                const oAngle = ((activeTemplate.overlayRotation ?? 0) * Math.PI) / 180;
-                ctx.save();
-                ctx.translate(ox + ow / 2, oy + oh / 2);
-                ctx.rotate(oAngle);
-                ctx.drawImage(loadedOverlayImg, -ow / 2, -oh / 2, ow, oh);
-                ctx.restore();
-              }
+            if (loadedOverlayImg) {
+              const overlayX = activeTemplate?.overlayX ?? 0;
+              const overlayY = activeTemplate?.overlayY ?? 0;
+              const overlayW = activeTemplate?.overlayW ?? 100;
+              const overlayH = activeTemplate?.overlayH ?? 100;
+
+              const ow = (overlayW / 100) * 500 * scaleX;
+              const oh = (overlayH / 100) * 1202.5 * scaleY;
+              const ox = padding + (overlayX / 100) * 500 * scaleX;
+              const oy = padding + (overlayY / 100) * 1202.5 * scaleY;
+              const oAngle = ((activeTemplate.overlayRotation ?? 0) * Math.PI) / 180;
+
+              ctx.save();
+              ctx.translate(ox + ow / 2, oy + oh / 2);
+              ctx.rotate(oAngle);
+              ctx.drawImage(loadedOverlayImg, -ow / 2, -oh / 2, ow, oh);
+              ctx.restore();
             }
           } else {
             if (loadedImages[0]) {
@@ -543,21 +514,6 @@ export async function renderPhotoStrip({
             });
           }
         };
-
-        // Draw the main image overlay for non-custom frames (e.g. multi-slot presets)
-        if (activeTemplate?.imageOverlay && !isCustomFrame && loadedOverlayImg) {
-          const ox = (activeTemplate.overlayX ?? 0) / 100 * canvas.width;
-          const oy = (activeTemplate.overlayY ?? 0) / 100 * canvas.height;
-          const ow = (activeTemplate.overlayW ?? 100) / 100 * canvas.width;
-          const oh = (activeTemplate.overlayH ?? 100) / 100 * canvas.height;
-          const angle = ((activeTemplate.overlayRotation ?? 0) * Math.PI) / 180;
-
-          ctx.save();
-          ctx.translate(ox + ow / 2, oy + oh / 2);
-          ctx.rotate(angle);
-          ctx.drawImage(loadedOverlayImg, -ow / 2, -oh / 2, ow, oh);
-          ctx.restore();
-        }
 
         drawStickers();
         resolve(canvas.toDataURL("image/png"));

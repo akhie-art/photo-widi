@@ -25,11 +25,7 @@ export function generateDefaultSlots(count: number): SlotConfig[] {
   }));
 }
 
-const STRIP_W_CM = 10;
-const STRIP_H_CM = 24.05;
-
-const pctToCmW = (pct: number) => (pct / 100) * STRIP_W_CM;
-const pctToCmH = (pct: number) => (pct / 100) * STRIP_H_CM;
+// CM dimensions conversion helper (moved inside component for dynamic paperSize support)
 
 function isPointInSlot(px: number, py: number, slot: SlotConfig): boolean {
   const cx = slot.xPct + slot.widthPct / 2;
@@ -88,6 +84,7 @@ interface Props {
   overlayZIndex?: number;
   onChangeOverlayZIndex?: (z: number) => void;
   maxSlots?:  number;
+  paperSize?: "2R" | "4R";
 }
 
 // ─── component ───────────────────────────────────────────────────────────────
@@ -105,14 +102,45 @@ export default function SlotLayoutEditor({
   overlayZIndex,
   onChangeOverlayZIndex,
   maxSlots,
+  paperSize = "2R",
 }: Props) {
+  const is2R = paperSize === "2R";
+  const STRIP_W_CM = is2R ? 5.08 : 10.16;
+  const STRIP_H_CM = 15.24;
+
+  const pctToCmW = (pct: number) => (pct / 100) * STRIP_W_CM;
+  const pctToCmH = (pct: number) => (pct / 100) * STRIP_H_CM;
+
   const containerRef = useRef<HTMLDivElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
   const drag         = useRef<DragState>(null);
   const [activeId, setActiveId] = useState<string | null>(slots[0]?.id ?? null);
   const [editTarget, setEditTarget] = useState<"slots" | "overlay">("slots");
   const [guides, setGuides] = useState<{ x?: number; y?: number }>({});
   
   const [zoom, setZoom] = useState(1);
+
+  // Wheel zoom gesture handler (Touchpad pinch / Ctrl + Scroll)
+  useEffect(() => {
+    const scrollContainer = scrollContainerRef.current;
+    if (!scrollContainer) return;
+
+    const handleWheel = (e: WheelEvent) => {
+      if (e.ctrlKey) {
+        e.preventDefault();
+        const zoomFactor = 0.01;
+        setZoom((currentZoom) => {
+          const nextZoom = currentZoom - e.deltaY * zoomFactor;
+          return Math.max(0.2, Math.min(3, nextZoom));
+        });
+      }
+    };
+
+    scrollContainer.addEventListener("wheel", handleWheel, { passive: false });
+    return () => {
+      scrollContainer.removeEventListener("wheel", handleWheel);
+    };
+  }, []);
   const [localOverlayZ, setLocalOverlayZ] = useState(slots.length);
   const activeOverlayZ = overlayZIndex ?? localOverlayZ;
 
@@ -597,10 +625,7 @@ export default function SlotLayoutEditor({
       {/* KIRI: Kanvas & Kontrol */}
       <div className="flex-1 flex flex-col gap-3 min-w-0">
         
-        <div className="flex items-center justify-between gap-2 flex-wrap">
-          <span className="text-[10px] font-semibold text-zinc-600 dark:text-zinc-400 select-none">
-            Pratinjau Kanvas
-          </span>
+        <div className="flex items-center justify-end gap-2 flex-wrap">
           <div className="flex items-center gap-1.5">
             {/* UNDO & REDO Group */}
             <div className="flex items-center bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-lg overflow-hidden shadow-sm">
@@ -659,19 +684,32 @@ export default function SlotLayoutEditor({
             </button>
           </div>
 
-          <div className="flex-1 overflow-auto w-full h-full custom-scrollbar">
+          <div 
+            ref={scrollContainerRef}
+            className="flex-1 overflow-auto w-full h-full custom-scrollbar"
+          >
             <div className="min-w-full min-h-full flex items-center justify-center p-8">
               
-              <div 
-                style={{ 
-                  width: 240, 
-                  height: 577.2, 
-                  transform: `scale(${zoom})`, 
-                  transformOrigin: 'center', 
-                  transition: 'transform 0.15s ease-out',
-                  flexShrink: 0 
+              {/* Outer Wrapper that scales with Zoom to maintain correct scroll boundary limits */}
+              <div
+                style={{
+                  width: (is2R ? 160 : 300) * zoom,
+                  height: (is2R ? 480 : 447) * zoom,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  flexShrink: 0,
                 }}
               >
+                <div 
+                  style={{ 
+                    width: is2R ? 160 : 300, 
+                    height: is2R ? 480 : 447, 
+                    transform: `scale(${zoom})`, 
+                    transformOrigin: 'center', 
+                    flexShrink: 0 
+                  }}
+                >
                 <div
                   ref={containerRef}
                   className="relative overflow-visible border border-zinc-300 dark:border-zinc-700/80 select-none shadow-sm w-full h-full bg-checkered"
@@ -685,6 +723,22 @@ export default function SlotLayoutEditor({
                 >
                   {guides.x !== undefined && <div style={{ position: "absolute", top: 0, bottom: 0, left: `${guides.x}%`, width: "1.5px", borderLeft: "1.5px dashed #ff007f", zIndex: 40, pointerEvents: "none" }} />}
                   {guides.y !== undefined && <div style={{ position: "absolute", left: 0, right: 0, top: `${guides.y}%`, height: "1.5px", borderTop: "1.5px dashed #ff007f", zIndex: 40, pointerEvents: "none" }} />}
+
+                  {/* Garis putus-putus vertikal putih di tengah kanvas */}
+                  <div
+                    style={{
+                      position: "absolute",
+                      top: 0,
+                      bottom: 0,
+                      left: "50%",
+                      width: 0,
+                      borderLeft: "1.5px dashed rgba(255, 255, 255, 0.8)",
+                      transform: "translateX(-50%)",
+                      zIndex: 5,
+                      pointerEvents: "none",
+                      filter: "drop-shadow(0px 0px 1px rgba(0,0,0,0.5))"
+                    }}
+                  />
 
                   {slots.map((slot) => {
                     const isActive = slot.id === activeId && editTarget === "slots";
@@ -790,14 +844,12 @@ export default function SlotLayoutEditor({
           </div>
         </div>
       </div>
+    </div>
 
       {/* KANAN: Daftar Lapisan Terintegrasi */}
       <div className="w-full md:w-56 shrink-0 bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl p-3.5 flex flex-col shadow-sm max-h-[500px]">
-        <div className="mb-4">
+        <div className="mb-2">
           <h4 className="text-sm font-semibold text-zinc-900 dark:text-white">Daftar Lapisan</h4>
-          <p className="text-[10px] text-zinc-500 mt-1 leading-relaxed">
-            Pilih dan atur posisi urutan tumpukan (paling atas = terdepan).
-          </p>
         </div>
         <div className="flex-1 overflow-y-auto space-y-1.5 pr-1 custom-scrollbar">
           {uiLayers.map((layer, index) => {

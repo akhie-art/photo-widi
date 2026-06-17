@@ -1,12 +1,11 @@
 "use client";
 
 import React from "react";
-import { EventConfig, PresetTemplate, PlacedSticker } from "../../hooks/usePhotoboothStore";
+import { EventConfig, PresetTemplate, StickerAsset, PlacedSticker } from "../../hooks/usePhotoboothStore";
 import ConfigSelectorCard, { FilterItem } from "./ConfigSelectorCard";
 import CameraStandbyCard from "./CameraStandbyCard";
 import PhotoStripProgressCard from "./PhotoStripProgressCard";
 import { useCaptureLayout } from "../../hooks/useCaptureLayout";
-import { useStickerInteraction } from "../../hooks/useStickerInteraction";
 
 interface LayoutItem {
   id: string;
@@ -43,11 +42,11 @@ interface CaptureScreenProps {
   sessionsCount: number;
   onSelectPreset?: (preset: PresetTemplate) => void;
   onSelectFilter?: (filter: FilterItem) => void;
-  placedStickers?: PlacedSticker[];
-  onAddSticker?: (stickerId: string) => void;
-  onClearStickers?: () => void;
-  onUpdateSticker?: (id: string, fields: Partial<PlacedSticker>) => void;
-  onDeleteSticker?: (id: string) => void;
+  placedStickers: PlacedSticker[];
+  onAddSticker: (sticker: StickerAsset) => void;
+  onRemoveSticker: (id: string) => void;
+  // Menambahkan properti onUpdateSticker agar logic dari parent bisa berjalan
+  onUpdateSticker: (id: string, updates: Partial<PlacedSticker>) => void;
 }
 
 export default function CaptureScreen({
@@ -78,16 +77,14 @@ export default function CaptureScreen({
   sessionsCount,
   onSelectPreset,
   onSelectFilter,
-  placedStickers = [],
+  placedStickers,
   onAddSticker,
-  onClearStickers,
+  onRemoveSticker,
   onUpdateSticker,
-  onDeleteSticker,
 }: CaptureScreenProps) {
   const [activeTab, setActiveTab] = React.useState<"frame" | "filter" | "sticker">("frame");
   const containerRef = React.useRef<HTMLDivElement | null>(null);
 
-  // Hook for layout/geometry calculations
   const {
     activeTemplate,
     isCustomFrame,
@@ -107,26 +104,13 @@ export default function CaptureScreen({
     layoutsCount,
   });
 
-  // Hook for sticker drag-and-drop & pointer interactions
-  const {
-    activeStickerId,
-    setActiveStickerId,
-    handlePointerDown,
-    handlePointerMove,
-    handlePointerUp,
-  } = useStickerInteraction({
-    placedStickers,
-    onUpdateSticker,
-    containerRef,
-  });
-
   const filledPhotosCount = Array.from({ length: layoutsCount }).filter((_, idx) => !!capturedPhotos[idx]).length;
 
   return (
-    <div className="max-w-7xl mx-auto w-full grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 px-4 items-start justify-center animate-fade-in duration-300">
+    <div className="w-full h-screen grid grid-cols-12 gap-4 md:gap-6 p-4 md:p-6 items-stretch justify-center animate-fade-in duration-300 overflow-hidden">
       
       {/* COLUMN 1: CONFIGURATION SELECTOR CARD */}
-      <div className="w-full col-span-1 md:col-span-1 lg:col-span-1 row-start-2 md:row-start-1 lg:row-start-1 md:col-start-2 lg:col-start-1">
+      <div className="w-full h-full col-span-12 portrait:col-span-12 portrait:row-start-2 portrait:col-start-1 landscape:col-span-3 landscape:row-start-1 landscape:col-start-1 flex flex-col justify-stretch">
         <ConfigSelectorCard
           isCapturing={isCapturing}
           config={config}
@@ -135,16 +119,14 @@ export default function CaptureScreen({
           activeFrameId={activeFrameId}
           activeFilter={activeFilter}
           activeFiltersList={activeFiltersList}
-          placedStickers={placedStickers}
           onSelectPreset={onSelectPreset}
           onSelectFilter={onSelectFilter}
           onAddSticker={onAddSticker}
-          onClearStickers={onClearStickers}
         />
       </div>
 
       {/* COLUMN 2: CAMERA STANDBY CARD */}
-      <div className="w-full col-span-1 md:col-span-1 lg:col-span-2 row-start-1 md:row-start-1 lg:row-start-1 md:row-span-2 md:col-start-1 lg:col-start-2">
+      <div className="w-full col-span-12 portrait:col-span-9 portrait:row-start-1 portrait:col-start-1 landscape:col-span-6 landscape:row-start-1 landscape:col-start-4 h-full flex flex-col min-h-0">
         <CameraStandbyCard
           videoRef={videoRef}
           isCapturing={isCapturing}
@@ -166,7 +148,7 @@ export default function CaptureScreen({
       </div>
 
       {/* COLUMN 3: PHOTO STRIP PROGRESS/RESULTS */}
-      <div className="w-full col-span-1 md:col-span-1 lg:col-span-1 row-start-3 md:row-start-2 lg:row-start-1 md:col-start-2 lg:col-start-4">
+      <div className="w-full col-span-12 portrait:col-span-3 portrait:row-start-1 portrait:col-start-10 landscape:col-span-3 landscape:row-start-1 landscape:col-start-10 h-full flex flex-col min-h-0">
         <PhotoStripProgressCard
           containerRef={containerRef}
           capturedPhotos={capturedPhotos}
@@ -183,18 +165,14 @@ export default function CaptureScreen({
           activeTemplate={activeTemplate}
           getBackgroundStyle={getBackgroundStyle}
           getSlotBorderStyle={getSlotBorderStyle}
-          placedStickers={placedStickers}
-          activeStickerId={activeStickerId}
-          setActiveStickerId={setActiveStickerId}
-          handlePointerDown={handlePointerDown}
-          handlePointerMove={handlePointerMove}
-          handlePointerUp={handlePointerUp}
           isCapturing={isCapturing}
           onRetakeSlot={onRetakeSlot}
-          onDeleteSticker={onDeleteSticker}
           onComplete={onComplete}
           filledPhotosCount={filledPhotosCount}
           config={config}
+          placedStickers={placedStickers}
+          onRemoveSticker={onRemoveSticker}
+          onUpdateSticker={onUpdateSticker} /* Meneruskan onUpdateSticker di sini */
         />
       </div>
 

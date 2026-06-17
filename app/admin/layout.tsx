@@ -145,7 +145,7 @@ export default function AdminLayout({
   }
 
   return (
-    <div className="flex-1 bg-background text-foreground min-h-screen">
+    <div className="flex-1 bg-background text-foreground flex flex-col">
       {/* 📺 Fullscreen Slideshow Viewport Overlay */}
       <SlideshowOverlay
         isOpen={isSlideshowActive}
@@ -157,8 +157,7 @@ export default function AdminLayout({
       />
 
       {/* 🛠️ Layout with SidebarProvider */}
-      <SidebarProvider defaultOpen={true}>
-        <div className="flex h-screen w-full overflow-hidden bg-background">
+      <SidebarProvider defaultOpen={true} className="h-screen overflow-hidden">
           
           {/* 👈 Left Navigation Sidebar */}
           <Sidebar collapsible="icon" className="border-r border-sidebar-border bg-sidebar text-sidebar-foreground transition-all duration-200">
@@ -312,7 +311,12 @@ export default function AdminLayout({
                 <span className="group-data-[state=collapsed]:hidden">Kembali Ke Booth</span>
               </Link>
               <button
-                onClick={() => {
+                onClick={async () => {
+                  try {
+                    await supabase.auth.signOut();
+                  } catch (err) {
+                    console.error("Sign out error:", err);
+                  }
                   sessionStorage.removeItem("glow_admin_auth");
                   router.replace("/login");
                 }}
@@ -349,12 +353,11 @@ export default function AdminLayout({
             </header>
 
             {/* Dashboard Inset Panel Content */}
-            <div className="flex-1 p-6 md:p-10 max-w-6xl w-full mx-auto">
+            <div className="flex-1 p-5 md:p-6 max-w-6xl w-full mx-auto">
               {children}
             </div>
           </SidebarInset>
 
-        </div>
       </SidebarProvider>
     </div>
   );

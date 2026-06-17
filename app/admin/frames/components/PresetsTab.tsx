@@ -5,7 +5,6 @@ import { toast } from "sonner";
 import { Plus, Edit2, Trash2, CheckCircle2, Eye, ImagePlus, X, Pipette, Crop, Palette, RotateCcw, Check, Pointer } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { EventConfig, PresetTemplate, SlotConfig } from "../../../hooks/usePhotoboothStore";
 import ConfirmDeleteDialog from "@/components/ui/ConfirmDeleteDialog";
@@ -14,8 +13,8 @@ import StripPreview from "./StripPreview";
 
 interface PresetsTabProps {
   config: EventConfig;
-  addPresetTemplate: (preset: Omit<PresetTemplate, "id">) => void;
-  updatePresetTemplate: (id: string, fields: Partial<PresetTemplate>) => void;
+  addPresetTemplate: (preset: Omit<PresetTemplate, "id">) => Promise<boolean>;
+  updatePresetTemplate: (id: string, fields: Partial<PresetTemplate>) => Promise<boolean>;
   deletePresetTemplate: (id: string) => void;
   setActivePresetTemplate: (id: string) => void;
 }
@@ -25,11 +24,14 @@ export default function PresetsTab({ config, addPresetTemplate, updatePresetTemp
   const [selectedPresetId, setSelectedPresetId] = useState<string>("");
   const [presetModalOpen, setPresetModalOpen] = useState(false);
   const [presetEditingId, setPresetEditingId] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
   
   // ─── STATE FORM ─────────────────────────────────────────────────────────────
   const [presetFormName, setPresetFormName] = useState("");
   const [presetFormOverlay, setPresetFormOverlay] = useState<string | undefined>(undefined);
   const [presetFormSlots, setPresetFormSlots] = useState<SlotConfig[]>(generateDefaultSlots(4));
+  const [presetFormPaperSize, setPresetFormPaperSize] = useState<"2R" | "4R">("2R");
+  const [overlayUploading, setOverlayUploading] = useState(false);
   const [presetFormOverlayX, setPresetFormOverlayX] = useState(0);
   const [presetFormOverlayY, setPresetFormOverlayY] = useState(0);
   const [presetFormOverlayW, setPresetFormOverlayW] = useState(100);
@@ -70,6 +72,7 @@ export default function PresetsTab({ config, addPresetTemplate, updatePresetTemp
   const openAddPreset = () => {
     setPresetEditingId(null); setPresetFormName(""); setPresetFormOverlay(undefined);
     setPresetFormSlots(generateDefaultSlots(4));
+    setPresetFormPaperSize("2R");
     setPresetFormOverlayX(0); setPresetFormOverlayY(0); setPresetFormOverlayW(100);
     setPresetFormOverlayH(100); setPresetFormOverlayRotation(0); setPresetModalOpen(true);
   };
@@ -77,28 +80,55 @@ export default function PresetsTab({ config, addPresetTemplate, updatePresetTemp
   const openEditPreset = (preset: PresetTemplate) => {
     setPresetEditingId(preset.id); setPresetFormName(preset.name); setPresetFormOverlay(preset.imageOverlay);
     setPresetFormSlots(preset.customSlots ?? generateDefaultSlots(4));
+    setPresetFormPaperSize(preset.paperSize || "2R");
     setPresetFormOverlayX(preset.overlayX ?? 0); setPresetFormOverlayY(preset.overlayY ?? 0);
     setPresetFormOverlayW(preset.overlayW ?? 100); setPresetFormOverlayH(preset.overlayH ?? 100);
-    setPresetFormOverlayRotation(preset.overlayRotation ?? 0); setPresetModalOpen(true);
+    setPresetFormOverlayRotation(preset.overlayRotation ?? 0);
+    setOverlayUploading(false);
+    setPresetModalOpen(true);
   };
 
-  const closePresetModal = () => { setPresetModalOpen(false); setPresetEditingId(null); };
+  const closePresetModal = () => { setPresetModalOpen(false); setPresetEditingId(null); setIsSaving(false); };
 
-  const handlePresetSubmit = (e: React.FormEvent) => {
+  const handlePresetSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!presetFormName.trim()) { toast.error("Nama preset wajib diisi."); return; }
+    if (isSaving) return;
 
+    // Auto-generate name for new templates, keep existing name for edits
+    let nameToSubmit = presetFormName.trim();
+    if (!presetEditingId) {
+      const activeNumber = (config.presetTemplates?.length ?? 0) + 1;
+      nameToSubmit = `Template ${presetFormPaperSize} #${activeNumber}`;
+    }
+
+    if (!nameToSubmit) {
+      toast.error("Nama preset tidak boleh kosong.");
+      return;
+    }
+
+    setIsSaving(true);
     const payload: Omit<PresetTemplate, "id"> = {
-      name: presetFormName.trim(),
+      name: nameToSubmit,
       imageOverlay: presetFormOverlay, customSlots: presetFormSlots,
       overlayX: presetFormOverlayX, overlayY: presetFormOverlayY,
       overlayW: presetFormOverlayW, overlayH: presetFormOverlayH, overlayRotation: presetFormOverlayRotation,
       forceLayout: false,
+      paperSize: presetFormPaperSize,
     };
 
-    if (presetEditingId) updatePresetTemplate(presetEditingId, payload);
-    else addPresetTemplate(payload);
-    closePresetModal();
+    let success = false;
+    if (presetEditingId) {
+      success = await updatePresetTemplate(presetEditingId, payload);
+    } else {
+      success = await addPresetTemplate(payload);
+    }
+
+    setIsSaving(false);
+
+    if (success) {
+      toast.success(presetEditingId ? "Template berhasil diperbarui!" : "Template berhasil dibuat!");
+      closePresetModal();
+    }
   };
 
   const handlePresetOverlayUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -106,8 +136,12 @@ export default function PresetsTab({ config, addPresetTemplate, updatePresetTemp
     if (!file) return;
     if (file.type !== "image/png" && file.type !== "image/jpeg") { toast.error("Harap unggah file PNG atau JPG."); return; }
     if (file.size > 8 * 1024 * 1024) { toast.error("Ukuran file maksimal 8MB."); return; }
+    setOverlayUploading(true);
     const reader = new FileReader();
-    reader.onload = ev => setPresetFormOverlay(ev.target?.result as string);
+    reader.onload = ev => {
+      setPresetFormOverlay(ev.target?.result as string);
+      setTimeout(() => setOverlayUploading(false), 600);
+    };
     reader.readAsDataURL(file);
     e.target.value = ''; // reset
   };
@@ -163,8 +197,8 @@ export default function PresetsTab({ config, addPresetTemplate, updatePresetTemp
         left = startCrop.left + boundedDx; width = startCrop.width - boundedDx;
       }
       if (handle.includes('n')) {
-        const maxDy = startCrop.height - 5;
-        const boundedDy = Math.max(-startCrop.top, Math.min(maxDy, dyPct));
+        const maxDx = startCrop.height - 5;
+        const boundedDy = Math.max(-startCrop.top, Math.min(maxDx, dyPct));
         top = startCrop.top + boundedDy; height = startCrop.height - boundedDy;
       }
     }
@@ -317,6 +351,7 @@ export default function PresetsTab({ config, addPresetTemplate, updatePresetTemp
                         overlayW={preset.overlayW} 
                         overlayH={preset.overlayH} 
                         overlayRotation={preset.overlayRotation} 
+                        paperSize={preset.paperSize}
                       />
                     </div>
                     
@@ -340,13 +375,14 @@ export default function PresetsTab({ config, addPresetTemplate, updatePresetTemp
                     </div>
                   </div>
 
-                  {/* INFO & ACTION AREA */}
-                  <div className="p-3.5 flex flex-col flex-1">
-                    <h4 className="text-sm font-semibold text-zinc-900 dark:text-white truncate mb-2" title={preset.name}>
-                      {preset.name}
-                    </h4>
-                    
-                    <div className="flex flex-wrap gap-1.5 mb-3">
+                  {/* INFO AREA */}
+                  <div className="p-3 flex flex-col flex-1">
+                    <div className="flex flex-wrap gap-1.5">
+                      {isActive && (
+                        <span className="text-[9px] font-semibold tracking-wide px-1.5 py-0.5 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 uppercase flex items-center gap-1">
+                          <CheckCircle2 className="w-2.5 h-2.5" /> Aktif
+                        </span>
+                      )}
                       {preset.imageOverlay && (
                         <span className="text-[9px] font-semibold tracking-wide px-1.5 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400 uppercase">
                           Overlay
@@ -355,21 +391,6 @@ export default function PresetsTab({ config, addPresetTemplate, updatePresetTemp
                       <span className="text-[9px] font-semibold tracking-wide px-1.5 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400 uppercase">
                         {preset.customSlots?.length || 4} Slot
                       </span>
-                    </div>
-
-                    <div className="mt-auto pt-2.5 border-t border-zinc-100 dark:border-zinc-800/50">
-                      {isActive ? (
-                        <div className="flex items-center justify-center gap-1.5 py-1.5 w-full bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded-md text-[11px] font-bold tracking-wide uppercase">
-                          <CheckCircle2 className="w-3.5 h-3.5" /> Sedang Aktif
-                        </div>
-                      ) : (
-                        <button 
-                          onClick={e => { e.stopPropagation(); setActivePresetTemplate(preset.id); setSelectedPresetId(preset.id); }} 
-                          className="w-full py-1.5 text-[11px] font-bold tracking-wide uppercase text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-md transition-colors"
-                        >
-                          Jadikan Aktif
-                        </button>
-                      )}
                     </div>
                   </div>
                 </div>
@@ -385,7 +406,7 @@ export default function PresetsTab({ config, addPresetTemplate, updatePresetTemp
               <div className="flex justify-center bg-zinc-50 dark:bg-zinc-900/50 py-6 rounded-lg border border-zinc-100 dark:border-zinc-800/50 relative overflow-hidden">
                 <div className="absolute inset-0 opacity-[0.15] dark:opacity-[0.05]" style={{ backgroundImage: 'repeating-conic-gradient(#cbd5e1 0% 25%, transparent 0% 50%)', backgroundSize: '16px 16px' }} />
                 <div className="z-10">
-                  <StripPreview overlay={selectedPreset.imageOverlay} customSlots={selectedPreset.customSlots} size="lg" overlayX={selectedPreset.overlayX} overlayY={selectedPreset.overlayY} overlayW={selectedPreset.overlayW} overlayH={selectedPreset.overlayH} overlayRotation={selectedPreset.overlayRotation} />
+                  <StripPreview overlay={selectedPreset.imageOverlay} customSlots={selectedPreset.customSlots} size="lg" overlayX={selectedPreset.overlayX} overlayY={selectedPreset.overlayY} overlayW={selectedPreset.overlayW} overlayH={selectedPreset.overlayH} overlayRotation={selectedPreset.overlayRotation} paperSize={selectedPreset.paperSize} />
                 </div>
               </div>
               <div className="space-y-3">
@@ -412,46 +433,124 @@ export default function PresetsTab({ config, addPresetTemplate, updatePresetTemp
 
       {/* DIALOG EDITOR PRESET UTAMA */}
       <Dialog open={presetModalOpen} onOpenChange={open => { if (!open) closePresetModal(); }}>
-        <DialogContent className="bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 text-zinc-900 dark:text-white !max-w-[1200px] w-[95vw] h-[90vh] sm:rounded-2xl p-0 shadow-2xl overflow-hidden flex flex-col">
+        <DialogContent 
+          showCloseButton={false}
+          className="bg-white dark:bg-zinc-950 text-zinc-900 dark:text-white w-screen h-screen !max-w-none !max-h-none !rounded-none border-none p-0 !m-0 overflow-hidden flex flex-col shadow-none outline-none z-50"
+        >
           
           <div className="px-6 py-4 border-b border-zinc-200 dark:border-zinc-800 flex items-center justify-between shrink-0">
             <div>
               <DialogTitle className="text-lg font-semibold">{presetEditingId ? "Edit Template Instan" : "Buat Template Instan"}</DialogTitle>
-              <DialogDescription className="text-sm text-zinc-500 mt-1">Atur nama template, overlay PNG, dan posisi letak jepretan kamera.</DialogDescription>
+              <DialogDescription className="sr-only">Atur ukuran kertas, overlay PNG, dan posisi letak jepretan kamera.</DialogDescription>
             </div>
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={closePresetModal}
+              className="h-9 w-9 p-0 text-zinc-400 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-lg transition-colors cursor-pointer"
+            >
+              <X className="w-5 h-5" />
+            </Button>
           </div>
           
           <div className="flex-1 overflow-hidden flex flex-col md:flex-row">
             {/* Panel Form Kiri */}
             <div className="w-full md:w-[320px] lg:w-[360px] p-6 overflow-y-auto border-r border-zinc-200 dark:border-zinc-800 space-y-6 shrink-0 custom-scrollbar">
               <form id="preset-form" onSubmit={handlePresetSubmit} className="space-y-6">
-                <div className="space-y-2">
-                  <Label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Nama Template</Label>
-                  <Input required autoFocus value={presetFormName} onChange={e => setPresetFormName(e.target.value)} placeholder="Contoh: Retro Classic" className="h-11 rounded-lg border-zinc-200" />
-                </div>
                 
                 <div className="space-y-3">
-                  <Label className="text-sm font-medium text-zinc-700 dark:text-zinc-300 flex justify-between">Gambar Overlay <span className="text-zinc-400 font-normal">Opsional</span></Label>
-                  {presetFormOverlay ? (
-                    <div className="flex flex-col gap-3 p-4 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg">
-                      <div className="flex items-center gap-3">
-                        <div className="w-14 h-16 rounded flex items-center justify-center border border-zinc-200 dark:border-zinc-700 overflow-hidden shrink-0"
-                             style={{ backgroundImage: 'repeating-conic-gradient(#e5e7eb 0% 25%, transparent 0% 50%)', backgroundSize: '10px 10px' }}>
-                          <img src={presetFormOverlay} alt="overlay" className="w-full h-full object-contain" />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-green-600 dark:text-green-400 truncate">Gambar Tersimpan ✓</p>
-                          <p className="text-[10px] text-zinc-500 mt-0.5 leading-tight">Gunakan fitur Edit untuk memotong atau menghapus background hijau.</p>
+                  <Label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Ukuran Kertas</Label>
+                  <div className="grid grid-cols-2 gap-3">
+                    {/* 2R Card */}
+                    <div 
+                      onClick={() => setPresetFormPaperSize("2R")}
+                      className={`flex flex-col p-3 rounded-xl border cursor-pointer select-none transition-all duration-200 hover:-translate-y-0.5 hover:shadow-sm ${
+                        presetFormPaperSize === "2R" 
+                          ? "border-zinc-900 dark:border-zinc-100 bg-zinc-50 dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100" 
+                          : "border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 text-zinc-500 dark:text-zinc-400"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-xs font-semibold">Ukuran 2R</span>
+                        <div className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center ${
+                          presetFormPaperSize === "2R" ? "border-zinc-900 dark:border-zinc-100 bg-zinc-900 dark:bg-zinc-100" : "border-zinc-300 dark:border-zinc-750 bg-transparent"
+                        }`}>
+                          {presetFormPaperSize === "2R" && <span className="w-1.5 h-1.5 rounded-full bg-white dark:bg-zinc-950" />}
                         </div>
                       </div>
                       
-                      <div className="flex gap-2 mt-1">
-                        <Button type="button" onClick={openImageEditor} variant="outline" className="flex-1 h-8 text-xs gap-1.5 border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-950">
-                          <Palette className="w-3.5 h-3.5" /> Editor Gambar
-                        </Button>
-                        <Button type="button" onClick={() => setPresetFormOverlay(undefined)} variant="destructive" className="h-8 px-2.5 bg-red-50 text-red-600 hover:bg-red-100 dark:bg-red-900/20 dark:text-red-400 dark:hover:bg-red-900/40">
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </Button>
+                      <div className="mt-2 h-10 w-full flex items-center justify-center bg-zinc-50 dark:bg-zinc-900/50 rounded-lg border border-zinc-100 dark:border-zinc-800/80 p-1 shrink-0">
+                        <div className={`h-full aspect-[1/3] border rounded ${
+                          presetFormPaperSize === "2R" ? "border-zinc-400 bg-zinc-400/20" : "border-zinc-300 dark:border-zinc-700 bg-zinc-200 dark:bg-zinc-800"
+                        }`} />
+                      </div>
+                    </div>
+
+                    {/* 4R Card */}
+                    <div 
+                      onClick={() => setPresetFormPaperSize("4R")}
+                      className={`flex flex-col p-3 rounded-xl border cursor-pointer select-none transition-all duration-200 hover:-translate-y-0.5 hover:shadow-sm ${
+                        presetFormPaperSize === "4R" 
+                          ? "border-zinc-900 dark:border-zinc-100 bg-zinc-50 dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100" 
+                          : "border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 text-zinc-500 dark:text-zinc-400"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-xs font-semibold">Ukuran 4R</span>
+                        <div className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center ${
+                          presetFormPaperSize === "4R" ? "border-zinc-900 dark:border-zinc-100 bg-zinc-900 dark:bg-zinc-100" : "border-zinc-300 dark:border-zinc-750 bg-transparent"
+                        }`}>
+                          {presetFormPaperSize === "4R" && <span className="w-1.5 h-1.5 rounded-full bg-white dark:bg-zinc-950" />}
+                        </div>
+                      </div>
+                      
+                      <div className="mt-2 h-10 w-full flex items-center justify-center bg-zinc-50 dark:bg-zinc-900/50 rounded-lg border border-zinc-100 dark:border-zinc-800/80 p-1 shrink-0">
+                        <div className={`h-full aspect-[2/3] border rounded ${
+                          presetFormPaperSize === "4R" ? "border-zinc-400 bg-zinc-400/20" : "border-zinc-300 dark:border-zinc-700 bg-zinc-200 dark:bg-zinc-800"
+                        }`} />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  <Label className="text-sm font-medium text-zinc-700 dark:text-zinc-300 flex justify-between">Gambar Overlay <span className="text-zinc-400 font-normal">Opsional</span></Label>
+                  {presetFormOverlay ? (
+                    <div className="flex flex-col gap-3 p-3 bg-zinc-50 dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800 rounded-2xl">
+                      {/* Big Preview Area */}
+                      <div className="w-full h-64 rounded-xl flex items-center justify-center border border-zinc-200 dark:border-zinc-800 overflow-hidden relative bg-white dark:bg-zinc-950 shadow-inner"
+                           style={{ backgroundImage: 'repeating-conic-gradient(#cbd5e1 0% 25%, transparent 0% 50%)', backgroundSize: '16px 16px' }}>
+                        {/* overlay filter for better visual style */}
+                        <div className="absolute inset-0 opacity-[0.12] dark:opacity-[0.04]" style={{ backgroundImage: 'repeating-conic-gradient(#000000 0% 25%, transparent 0% 50%)', backgroundSize: '16px 16px' }} />
+                        
+                        {overlayUploading ? (
+                          <div className="absolute inset-0 flex items-center justify-center bg-zinc-100/80 dark:bg-zinc-900/80 backdrop-blur-sm z-10">
+                            <svg className="animate-spin w-6 h-6 text-zinc-500" fill="none" viewBox="0 0 24 24">
+                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+                            </svg>
+                          </div>
+                        ) : (
+                          <img src={presetFormOverlay} alt="overlay" className="max-w-full max-h-full object-contain p-4 relative z-10 drop-shadow-md" />
+                        )}
+                      </div>
+                      
+                      {/* Side-by-side action buttons */}
+                      <div className="w-full">
+                        {overlayUploading ? (
+                          <div className="text-xs font-semibold text-center text-blue-500 dark:text-blue-400 py-1 select-none animate-pulse">
+                            Memproses gambar...
+                          </div>
+                        ) : (
+                          <div className="grid grid-cols-2 gap-2">
+                            <Button type="button" onClick={openImageEditor} variant="outline" className="h-9 text-xs gap-1.5 border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 hover:bg-zinc-100 dark:hover:bg-zinc-900">
+                              <Palette className="w-3.5 h-3.5" /> Editor
+                            </Button>
+                            <Button type="button" onClick={() => { setPresetFormOverlay(undefined); setOverlayUploading(false); }} variant="destructive" className="h-9 text-xs gap-1.5 bg-red-50 text-red-650 hover:bg-red-100 dark:bg-red-900/20 dark:text-red-400 dark:hover:bg-red-900/40">
+                              <Trash2 className="w-3.5 h-3.5" /> Hapus
+                            </Button>
+                          </div>
+                        )}
                       </div>
                     </div>
                   ) : (
@@ -472,24 +571,31 @@ export default function PresetsTab({ config, addPresetTemplate, updatePresetTemp
             
             {/* Panel Kanvas Kanan */}
             <div className="flex-1 bg-zinc-50/50 dark:bg-zinc-900/20 p-6 flex flex-col overflow-hidden">
-              <div className="mb-4 shrink-0">
-                <h4 className="text-base font-semibold text-zinc-900 dark:text-white">Kanvas Slot Kamera</h4>
-                <p className="text-sm text-zinc-500 mt-0.5">Geser, ubah ukuran, atau putar kotak jepretan kamera agar pas dengan desain Anda.</p>
-              </div>
               <div className="flex-1 min-h-0 overflow-hidden">
                 <SlotLayoutEditor
                   slots={presetFormSlots} onChange={setPresetFormSlots} overlay={presetFormOverlay}
                   overlayX={presetFormOverlayX} overlayY={presetFormOverlayY}
                   overlayW={presetFormOverlayW} overlayH={presetFormOverlayH} overlayRotation={presetFormOverlayRotation}
                   onChangeOverlay={(x, y, w, h, rot) => { setPresetFormOverlayX(x); setPresetFormOverlayY(y); setPresetFormOverlayW(w); setPresetFormOverlayH(h); setPresetFormOverlayRotation(rot); }}
+                  paperSize={presetFormPaperSize}
                 />
               </div>
             </div>
           </div>
           
           <div className="px-6 py-4 border-t border-zinc-200 dark:border-zinc-800 flex justify-end gap-3 shrink-0 bg-white dark:bg-zinc-950">
-            <Button type="button" variant="ghost" onClick={closePresetModal} className="h-10 px-6 text-zinc-600 hover:bg-zinc-100">Batal</Button>
-            <Button type="submit" form="preset-form" className="bg-zinc-900 text-white hover:bg-zinc-800 dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-200 h-10 px-8 text-sm">Simpan Template</Button>
+            <Button type="button" variant="ghost" onClick={closePresetModal} disabled={isSaving} className="h-10 px-6 text-zinc-600 hover:bg-zinc-100">Batal</Button>
+            <Button type="submit" form="preset-form" disabled={isSaving || overlayUploading} className="bg-zinc-900 text-white hover:bg-zinc-800 dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-200 h-10 px-8 text-sm flex items-center gap-2">
+              {isSaving ? (
+                <>
+                  <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white dark:text-zinc-900" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
+                  </svg>
+                  Menyimpan...
+                </>
+              ) : "Simpan Template"}
+            </Button>
           </div>
         </DialogContent>
       </Dialog>

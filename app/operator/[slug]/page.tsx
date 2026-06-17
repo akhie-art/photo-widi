@@ -3,7 +3,7 @@
 /* eslint-disable react-hooks/set-state-in-effect */
 
 import { useState, useEffect, useRef } from "react";
-import { usePhotoboothStore, PresetTemplate, PlacedSticker } from "../../hooks/usePhotoboothStore";
+import { usePhotoboothStore, PresetTemplate, PlacedSticker, StickerAsset } from "../../hooks/usePhotoboothStore";
 import { supabase } from "@/lib/supabase";
 import { renderPhotoStrip } from "../../utils/canvasRenderer";
 import { playBeep, playShutterSound } from "../../utils/audio";
@@ -13,7 +13,6 @@ import { toast } from "sonner";
 
 
 import CaptureScreen from "../components/CaptureScreen";
-import PreviewScreen from "../components/PreviewScreen";
 import PaymentScreen from "../components/PaymentScreen";
 import SessionSetupScreen from "../components/SessionSetupScreen";
 import ShareScreen from "../components/ShareScreen";
@@ -48,7 +47,7 @@ export default function CustomerBoothSession() {
   const params = useParams();
   const slug = Array.isArray(params?.slug) ? params.slug[0] : params?.slug;
 
-  const [step, setStep] = useState<"start" | "payment" | "setup" | "capture" | "preview" | "share">("payment");
+  const [step, setStep] = useState<"start" | "payment" | "setup" | "capture" | "share">("payment");
   const [theme, setTheme] = useState<"dark" | "light">("dark");
   const [authorized, setAuthorized] = useState(false);
 
@@ -80,30 +79,32 @@ export default function CustomerBoothSession() {
   const [compiledStripUrl, setCompiledStripUrl] = useState<string | null>(null);
   const [isRendering, setIsRendering] = useState(false);
   const [customText, setCustomText] = useState("");
-  const [placedStickers, setPlacedStickers] = useState<PlacedSticker[]>([]);
-  const handleAddSticker = (stickerId: string) => {
-    /* eslint-disable-next-line react-hooks/purity */
-    const stickerIdStr = "placed_" + Date.now();
-    const newSticker: PlacedSticker = {
-      id: stickerIdStr,
-      stickerId,
-      xPct: 50,
-      yPct: 45,
-      scalePct: 20,
-      rotation: 0,
-    };
-    setPlacedStickers((prev) => [...prev, newSticker]);
-  };
-  const handleUpdateSticker = (id: string, fields: Partial<PlacedSticker>) => {
-    setPlacedStickers((prev) =>
-      prev.map((s) => (s.id === id ? { ...s, ...fields } : s))
-    );
-  };
-  const handleDeleteSticker = (id: string) => {
-    setPlacedStickers((prev) => prev.filter((s) => s.id !== id));
-  };
   const [lastSavedPhotoId, setLastSavedPhotoId] = useState<string | null>(null);
 
+  // Sticker state (lifted from CaptureScreen so canvasRenderer can use it)
+  const [placedStickers, setPlacedStickers] = useState<PlacedSticker[]>([]);
+
+  const handleAddSticker = (sticker: StickerAsset) => {
+    const id = `ps_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+    const xPct = 30 + Math.random() * 40;
+    const yPct = 20 + Math.random() * 60;
+    setPlacedStickers((prev) => [
+      ...prev,
+      { id, stickerId: sticker.id, xPct, yPct, scalePct: 100, rotation: Math.round((Math.random() - 0.5) * 30) },
+    ]);
+    toast(`Stiker "${sticker.name}" ditambahkan`, { duration: 1200, icon: "✨" });
+  };
+
+  const handleRemoveSticker = (id: string) => {
+    setPlacedStickers((prev) => prev.filter((ps) => ps.id !== id));
+  };
+const handleUpdateSticker = (id: string, updates: Partial<PlacedSticker>) => {
+    setPlacedStickers((prev) =>
+      prev.map((sticker) =>
+        sticker.id === id ? { ...sticker, ...updates } : sticker
+      )
+    );
+  };
   // Customer registration state
   const [customerName, setCustomerNameState] = useState("");
   const [customerPhone, setCustomerPhoneState] = useState("");
@@ -204,7 +205,7 @@ export default function CustomerBoothSession() {
     });
   };
 
-  const changeStep = (newStep: "start" | "payment" | "setup" | "capture" | "preview" | "share") => {
+  const changeStep = (newStep: "start" | "payment" | "setup" | "capture" | "share") => {
     if (newStep === "start") {
       router.push("/operator");
       return;
@@ -222,7 +223,7 @@ export default function CustomerBoothSession() {
     setCustomerPhoneState("");
     setSessionsCountState(1);
     setCapturedPhotosState([]);
-    setPlacedStickers([]);
+    setPlacedStickers([]); // reset stiker saat sesi baru
     if (typeof window !== "undefined") {
       sessionStorage.removeItem("glow_customer_name");
       sessionStorage.removeItem("glow_customer_phone");
@@ -266,7 +267,7 @@ export default function CustomerBoothSession() {
 
     const syncStepFromUrl = () => {
       const params = new URLSearchParams(window.location.search);
-      const urlStep = params.get("step") as "start" | "payment" | "setup" | "capture" | "preview" | "share" | null;
+      const urlStep = params.get("step") as "start" | "payment" | "setup" | "capture" | "share" | null;
       
       if (slug) {
         const name = sessionStorage.getItem("glow_customer_name") || "";
@@ -277,11 +278,11 @@ export default function CustomerBoothSession() {
 
         if (!name || !phone) {
           router.replace("/operator");
-        } else if (urlStep === "preview" && photos.length === 0) {
+        } else if (urlStep === "share" && photos.length === 0) {
           changeStep("capture");
         } else if (urlStep === "start") {
           router.replace("/operator");
-        } else if (urlStep && ["payment", "capture", "preview", "share"].includes(urlStep)) {
+        } else if (urlStep && ["payment", "capture", "share"].includes(urlStep)) {
           setStep(urlStep);
         } else {
           changeStep("payment");
@@ -522,9 +523,7 @@ export default function CustomerBoothSession() {
       ? selectedFrameTemplate.customSlots.length
       : layoutObj.count;
     
-    const poseGuide = isRetake 
-      ? `Ulangi Foto Slot ${slotIndex + 1}`
-      : (totalPhotos === 1 ? "Tunjukkan Senyuman Terbaik Anda" : POSE_SUGGESTIONS[slotIndex % POSE_SUGGESTIONS.length]);
+    const poseGuide = totalPhotos === 1 ? "Tunjukkan Senyuman Terbaik Anda" : POSE_SUGGESTIONS[slotIndex % POSE_SUGGESTIONS.length];
     setPoseAlert(poseGuide);
 
     await delay(1500);
@@ -588,53 +587,20 @@ export default function CustomerBoothSession() {
     captureSingleSlot(slotIndex, true);
   };
 
-  const generateFinalStrip = async () => {
+  const handleCaptureComplete = async () => {
     setIsRendering(true);
     try {
-      // PERBAIKAN: Menggunakan activePresetTemplateId alih-alih activeFrameId
-      const activeConfig = {
-        ...config,
-        activePresetTemplateId: activeFrameId, 
-        frameText: customText || config.frameText,
-      };
-      const result = await renderPhotoStrip({
-        photos: capturedPhotos,
-        layout: activeLayout,
-        config: activeConfig,
-      });
-      setCompiledStripUrl(result);
-    } catch (e) {
-      console.error("Compile photostrip error:", e);
-    } finally {
-      setIsRendering(false);
-    }
-  };
-
-  useEffect(() => {
-    if (step === "preview" && capturedPhotos.length > 0) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      generateFinalStrip();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [step, capturedPhotos, activeLayout, config, customText, activeFrameId]);
-
-  const handleDownload = async () => {
-    if (!compiledStripUrl) return;
-    setIsRendering(true);
-    try {
-      // PERBAIKAN: Menggunakan activePresetTemplateId alih-alih activeFrameId
       const activeConfig = {
         ...config,
         activePresetTemplateId: activeFrameId,
         frameText: customText || config.frameText,
       };
       
-      // Compile composite strip including interactive stickers
       const compositeUrl = await renderPhotoStrip({
         photos: capturedPhotos,
         layout: activeLayout,
         config: activeConfig,
-        placedStickers: placedStickers,
+        placedStickers,
       });
 
       setCompiledStripUrl(compositeUrl);
@@ -653,8 +619,8 @@ export default function CustomerBoothSession() {
       setLastSavedPhotoId(photoId || null);
       changeStep("share");
     } catch (e) {
-      console.error("Composite render error:", e);
-      toast.error("Gagal merakit foto strip.");
+      console.error("Composite render / save error:", e);
+      toast.error("Gagal memproses dan menyimpan foto strip.");
     } finally {
       setIsRendering(false);
     }
@@ -664,21 +630,6 @@ export default function CustomerBoothSession() {
     if (!compiledStripUrl) return;
     setIsRendering(true);
     try {
-      // PERBAIKAN: Menggunakan activePresetTemplateId alih-alih activeFrameId
-      const activeConfig = {
-        ...config,
-        activePresetTemplateId: activeFrameId,
-        frameText: customText || config.frameText,
-      };
-      
-      // Compile composite strip including interactive stickers
-      const compositeUrl = await renderPhotoStrip({
-        photos: capturedPhotos,
-        layout: activeLayout,
-        config: activeConfig,
-        placedStickers: placedStickers,
-      });
-
       // Open print window
       const printWindow = window.open("", "_blank");
       if (printWindow) {
@@ -716,34 +667,14 @@ export default function CustomerBoothSession() {
               </style>
             </head>
             <body>
-              <img src="${compositeUrl}" onload="window.print(); window.close();" />
+              <img src="${compiledStripUrl}" onload="window.print(); window.close();" />
             </body>
           </html>
         `);
         printWindow.document.close();
-      }
-
-      // Save composite to gallery
-      const operatorName = typeof window !== "undefined" ? sessionStorage.getItem("glow_operator_name") || undefined : undefined;
-      await addPhoto(compositeUrl, {
-        customerName,
-        customerPhone,
-        sessionsCount: 1,
-        operatorName,
-        capturedPhotos,
-        paymentMethod: paymentMethod || undefined,
-        amount: config.pricePerSession ?? 25000,
-      });
-      
-      if (currentSessionNum < sessionsCount) {
-        setCurrentSessionNum(prev => prev + 1);
-        setCapturedPhotos([]);
-        setPlacedStickers([]);
-        setCompiledStripUrl(null);
-        changeStep("capture");
+        toast.success("Membuka dialog pencetakan...");
       } else {
-        clearSessionData();
-        router.push("/operator");
+        toast.error("Gagal membuka jendela pencetakan. Harap izinkan pop-up.");
       }
     } catch (e) {
       console.error("Print error:", e);
@@ -759,7 +690,6 @@ export default function CustomerBoothSession() {
       if (currentSessionNum < sessionsCount) {
         setCurrentSessionNum(prev => prev + 1);
         setCapturedPhotos([]);
-        setPlacedStickers([]);
         setCompiledStripUrl(null);
         setLastSavedPhotoId(null);
         changeStep("capture");
@@ -793,7 +723,7 @@ export default function CustomerBoothSession() {
       // Auto-set activeLayout based on preset ID or customSlots count
       if (preset.id.includes("grid")) {
         setActiveLayout("grid");
-      } else if (preset.id.includes("polaroid") || (preset.customSlots && preset.customSlots.length === 1)) {
+      } else if (preset.id.includes("polaroid") || preset.customSlots) {
         setActiveLayout("polaroid");
       } else {
         setActiveLayout("strip");
@@ -812,8 +742,12 @@ export default function CustomerBoothSession() {
     );
   }
 
+  const isScrollLocked = ["payment", "capture", "share"].includes(step);
+
   return (
-    <div className="flex-1 bg-[#fbfbfb] dark:bg-[#0b0b0c] text-zinc-800 dark:text-[#e3e3e3] font-sans flex flex-col justify-between overflow-x-hidden min-h-screen relative transition-colors duration-300">
+    <div className={`flex-1 bg-[#fbfbfb] dark:bg-[#0b0b0c] text-zinc-800 dark:text-[#e3e3e3] font-sans flex flex-col justify-between relative transition-colors duration-300 ${
+      isScrollLocked ? "h-screen overflow-hidden" : "min-h-screen overflow-x-hidden"
+    }`}>
       {/* Visual Ambient Background Glows - Happy & Cheerful Colors */}
       <div className="absolute top-[-10%] left-[-10%] w-[50%] aspect-square rounded-full bg-amber-400/8 dark:bg-amber-500/5 blur-[120px] pointer-events-none z-0 animate-pulse" style={{ animationDuration: '8s' }} />
       <div className="absolute bottom-[-10%] right-[-10%] w-[50%] aspect-square rounded-full bg-pink-400/8 dark:bg-pink-500/5 blur-[120px] pointer-events-none z-0 animate-pulse" style={{ animationDuration: '10s' }} />
@@ -908,14 +842,72 @@ export default function CustomerBoothSession() {
         />
       )}
 
+      {slug && step === "share" && (
+        <ShareScreen
+          config={config}
+          compiledStripUrl={compiledStripUrl}
+          capturedPhotos={capturedPhotos}
+          customerName={customerName}
+          customerPhone={customerPhone}
+          currentSessionNum={currentSessionNum}
+          sessionsCount={sessionsCount}
+          photoId={lastSavedPhotoId}
+          onComplete={handleShareComplete}
+          handlePrint={handlePrint}
+        />
+      )}
+
+      {slug && step === "capture" && (
+        <CaptureScreen
+          videoRef={videoRef}
+          isCapturing={isCapturing}
+          capturedPhotos={capturedPhotos}
+          activeLayout={activeLayout}
+          activeFilter={activeFilter}
+          activeFiltersList={activeFiltersList}
+          activeLayoutsList={activeLayoutsList}
+          countdown={countdown}
+          poseAlert={poseAlert}
+          isMirrored={isMirrored}
+          setIsMirrored={setIsMirrored}
+          startCaptureSequence={startCaptureSequence}
+          onCancel={() => {
+            router.push("/operator");
+          }}
+          layoutsCount={(selectedFrameTemplate?.customSlots && selectedFrameTemplate.customSlots.length > 1)
+            ? selectedFrameTemplate.customSlots.length
+            : (LAYOUTS.find((l) => l.id === activeLayout)?.count ?? 4)}
+          config={config}
+          activeFrameId={activeFrameId}
+          countdownDuration={countdownDuration}
+          setCountdownDuration={setCountdownDuration}
+          onRetakeSlot={retakeSingleSlot}
+          onComplete={handleCaptureComplete}
+          currentCaptureNum={currentCaptureNum}
+          customerName={customerName}
+          customerPhone={customerPhone}
+          currentSessionNum={currentSessionNum}
+          sessionsCount={sessionsCount}
+          onSelectPreset={handleFrameSelect}
+          onSelectFilter={setActiveFilter}
+          placedStickers={placedStickers}
+          onAddSticker={handleAddSticker}
+          onRemoveSticker={handleRemoveSticker}
+          onUpdateSticker={handleUpdateSticker}
+        />
+      )}
+
       {/* All other steps: centered padded layout */}
-      {step !== "setup" && (
-        <div className="flex-1 flex flex-col items-center justify-center w-full z-10 relative py-10 px-4">
-          <main className="flex-1 flex flex-col items-center justify-center w-full relative">
+      {step !== "setup" && step !== "capture" && step !== "share" && (
+        <div className={`flex-1 flex flex-col items-center justify-center w-full z-10 relative ${
+          isScrollLocked ? "h-full py-2 overflow-hidden" : "py-10 px-4"
+        }`}>
+          <main className={`flex-1 flex flex-col items-center justify-center w-full relative ${
+            isScrollLocked ? "h-full overflow-hidden" : ""
+          }`}>
 
             {slug && step === "payment" && (
               <>
-
                 <PaymentScreen
                   customerName={customerName}
                   customerPhone={customerPhone}
@@ -934,86 +926,17 @@ export default function CustomerBoothSession() {
               </>
             )}
 
-            {slug && step === "capture" && (
-              <CaptureScreen
-                videoRef={videoRef}
-                isCapturing={isCapturing}
-                capturedPhotos={capturedPhotos}
-                activeLayout={activeLayout}
-                activeFilter={activeFilter}
-                activeFiltersList={activeFiltersList}
-                activeLayoutsList={activeLayoutsList}
-                countdown={countdown}
-                poseAlert={poseAlert}
-                isMirrored={isMirrored}
-                setIsMirrored={setIsMirrored}
-                startCaptureSequence={startCaptureSequence}
-                onCancel={() => {
-                  router.push("/operator");
-                }}
-                layoutsCount={(selectedFrameTemplate?.customSlots && selectedFrameTemplate.customSlots.length > 1)
-                  ? selectedFrameTemplate.customSlots.length
-                  : (LAYOUTS.find((l) => l.id === activeLayout)?.count ?? 4)}
-                config={config}
-                activeFrameId={activeFrameId}
-                countdownDuration={countdownDuration}
-                setCountdownDuration={setCountdownDuration}
-                onRetakeSlot={retakeSingleSlot}
-                onComplete={() => changeStep("preview")}
-                currentCaptureNum={currentCaptureNum}
-                customerName={customerName}
-                customerPhone={customerPhone}
-                currentSessionNum={currentSessionNum}
-                sessionsCount={sessionsCount}
-                onSelectPreset={handleFrameSelect}
-                onSelectFilter={setActiveFilter}
-                placedStickers={placedStickers}
-                onAddSticker={handleAddSticker}
-                onClearStickers={() => setPlacedStickers([])}
-                onUpdateSticker={handleUpdateSticker}
-                onDeleteSticker={handleDeleteSticker}
-              />
-            )}
-
-            {slug && step === "preview" && (
-              <PreviewScreen
-                compiledStripUrl={compiledStripUrl}
-                isRendering={isRendering}
-                config={config}
-                activeLayout={activeLayout}
-                handleDownload={handleDownload}
-                handlePrint={handlePrint}
-                onRetake={() => {
-                  changeStep("capture");
-                  setCapturedPhotos([]);
-                }}
-                onReset={() => {
-                  clearSessionData();
-                  changeStep("start");
-                }}
-                placedStickers={placedStickers}
-                setPlacedStickers={setPlacedStickers}
-                customerName={customerName}
-                customerPhone={customerPhone}
-                currentSessionNum={currentSessionNum}
-                sessionsCount={sessionsCount}
-              />
-            )}
-
-            {slug && step === "share" && (
-              <ShareScreen
-                config={config}
-                compiledStripUrl={compiledStripUrl}
-                capturedPhotos={capturedPhotos}
-                customerName={customerName}
-                customerPhone={customerPhone}
-                currentSessionNum={currentSessionNum}
-                sessionsCount={sessionsCount}
-                photoId={lastSavedPhotoId}
-                onComplete={handleShareComplete}
-              />
-            )}
           </main>
+        </div>
+      )}
+
+      {isRendering && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-[9999] flex flex-col items-center justify-center gap-4 text-white">
+          <div className="w-12 h-12 rounded-full border-4 border-emerald-500/30 border-t-emerald-500 animate-spin" />
+          <div className="flex flex-col items-center gap-1 text-center">
+            <span className="text-sm font-bold tracking-wide">Sedang Memproses &amp; Menyimpan Foto...</span>
+            <span className="text-xs text-zinc-400 dark:text-zinc-550 font-mono">Mohon tunggu sebentar</span>
+          </div>
         </div>
       )}
     </div>
