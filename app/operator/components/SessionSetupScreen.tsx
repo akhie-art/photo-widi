@@ -550,17 +550,12 @@ export default function SessionSetupScreen({
   ] as const;
 
   return (
-    <div className="min-h-screen bg-[#FFFBF7] dark:bg-slate-950 text-slate-800 dark:text-slate-100 font-sans flex flex-col selection:bg-rose-100 dark:selection:bg-rose-950/40 relative overflow-hidden transition-colors duration-500">
+    <div className="h-screen w-screen flex items-center justify-center p-4 md:p-8 select-none relative overflow-hidden transition-colors duration-300 z-10">
+      {/* Visual Ambient Background Glows */}
+      <div className="absolute top-[-10%] left-[-10%] w-[30%] aspect-square rounded-full bg-amber-400/5 dark:bg-amber-500/3 blur-[80px] pointer-events-none z-0" />
+      <div className="absolute bottom-[-10%] right-[-10%] w-[30%] aspect-square rounded-full bg-pink-400/5 dark:bg-pink-500/3 blur-[80px] pointer-events-none z-0" />
       
-      {/* Soft Pastel Ambient Glows */}
-      <div className="absolute inset-0 pointer-events-none z-0 overflow-hidden">
-        <div className="absolute -top-[20%] -left-[10%] w-[50%] md:w-[40%] aspect-square rounded-full bg-rose-200/40 dark:bg-rose-900/20 blur-[120px]" />
-        <div className="absolute top-[20%] -right-[10%] w-[45%] aspect-square rounded-full bg-amber-200/30 dark:bg-amber-900/10 blur-[120px]" />
-        <div className="absolute inset-0 bg-[linear-gradient(to_right,#80808008_1px,transparent_1px),linear-gradient(to_bottom,#80808008_1px,transparent_1px)] bg-[size:24px_24px]" />
-      </div>
-
-      {/* ── MAIN CONTAINER ── */}
-      <div className="w-full px-4 sm:px-8 py-8 flex flex-col flex-1 gap-8 z-10 relative">
+      <div className="w-[95%] lg:w-[80%] max-w-7xl h-[95%] lg:h-[85%] bg-white/90 dark:bg-zinc-950/80 backdrop-blur-xl border border-zinc-200/50 dark:border-zinc-800/40 rounded-[32px] p-5 md:p-8 flex flex-col shadow-2xl relative overflow-hidden transition-all duration-300 z-10 text-zinc-800 dark:text-[#e3e3e3] font-sans">
         
         {/* ── HEADER ── */}
         <header className="flex items-center justify-between pb-6 border-b border-rose-100/60 dark:border-slate-800/80 shrink-0">
@@ -595,7 +590,7 @@ export default function SessionSetupScreen({
         </header>
 
         {/* ── 2-COLUMN BODY ── */}
-        <main className="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+        <main className="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-8 items-start overflow-y-auto pr-1">
           
           {/* LEFT COLUMN: Selection (Span 8) */}
           <div className="lg:col-span-8 flex flex-col gap-6 w-full">
