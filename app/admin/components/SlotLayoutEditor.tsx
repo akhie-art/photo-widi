@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useRef, useCallback, useEffect, useMemo } from "react";
-import { Plus, Minus, RotateCcw, Trash2, Move, GripVertical, Image as ImageIcon, Square, ZoomIn, ZoomOut, ChevronUp, ChevronDown, Undo2, Redo2 } from "lucide-react";
+import { Plus, Minus, RotateCcw, Trash2, Move, GripVertical, Image as ImageIcon, Square, ZoomIn, ZoomOut, ChevronUp, ChevronDown, Undo2, Redo2, Layers } from "lucide-react";
 import { SlotConfig } from "../../hooks/usePhotoboothStore";
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
@@ -118,7 +118,8 @@ export default function SlotLayoutEditor({
   const [editTarget, setEditTarget] = useState<"slots" | "overlay">("slots");
   const [guides, setGuides] = useState<{ x?: number; y?: number }>({});
   
-  const [zoom, setZoom] = useState(1);
+  const [zoom, setZoom] = useState(paperSize === "2R" ? 1.5 : 1);
+  const [layersOpen, setLayersOpen] = useState(true);
   const zoomRef = useRef(zoom);
   useEffect(() => {
     zoomRef.current = zoom;
@@ -743,6 +744,12 @@ export default function SlotLayoutEditor({
                 </button>
               </>
             )}
+
+            <button type="button" onClick={() => setLayersOpen(!layersOpen)}
+              className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-lg hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-all cursor-pointer shadow-sm ml-1" title={layersOpen ? "Sembunyikan Lapisan" : "Tampilkan Lapisan"}>
+              <Layers className="w-3.5 h-3.5" strokeWidth={2} />
+              <span>{layersOpen ? "Sembunyikan Lapisan" : "Daftar Lapisan"}</span>
+            </button>
           </div>
         </div>
 
@@ -926,7 +933,11 @@ export default function SlotLayoutEditor({
     </div>
 
       {/* KANAN: Daftar Lapisan Terintegrasi */}
-      <div className="w-full md:w-[180px] lg:w-56 shrink-0 bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl p-3 flex flex-col shadow-sm max-h-[500px]">
+      <div className={`shrink-0 bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl p-3 flex flex-col shadow-sm max-h-[500px] transition-all duration-300 ${
+        layersOpen 
+          ? "w-full md:w-[180px] lg:w-56 opacity-100" 
+          : "w-0 p-0 opacity-0 border-none overflow-hidden pointer-events-none"
+      }`}>
         <div className="mb-2">
           <h4 className="text-sm font-semibold text-zinc-900 dark:text-white">Daftar Lapisan</h4>
         </div>

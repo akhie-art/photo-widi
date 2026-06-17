@@ -2,7 +2,7 @@
 
 import React, { useState, useCallback, useEffect, useRef } from "react";
 import { toast } from "sonner";
-import { Plus, Edit2, Trash2, CheckCircle2, Eye, ImagePlus, X, Pipette, Crop, Palette, RotateCcw, Check, Pointer } from "lucide-react";
+import { Plus, Edit2, Trash2, CheckCircle2, Eye, ImagePlus, X, Pipette, Crop, Palette, RotateCcw, Check, Pointer, Sidebar } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
@@ -25,6 +25,7 @@ export default function PresetsTab({ config, addPresetTemplate, updatePresetTemp
   const [presetModalOpen, setPresetModalOpen] = useState(false);
   const [presetEditingId, setPresetEditingId] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
   
   // ─── STATE FORM ─────────────────────────────────────────────────────────────
   const [presetFormName, setPresetFormName] = useState("");
@@ -88,7 +89,7 @@ export default function PresetsTab({ config, addPresetTemplate, updatePresetTemp
     setPresetModalOpen(true);
   };
 
-  const closePresetModal = () => { setPresetModalOpen(false); setPresetEditingId(null); setIsSaving(false); };
+  const closePresetModal = () => { setPresetModalOpen(false); setPresetEditingId(null); setIsSaving(false); setSidebarOpen(true); };
 
   const handlePresetSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -439,9 +440,20 @@ export default function PresetsTab({ config, addPresetTemplate, updatePresetTemp
         >
           
           <div className="px-6 py-4 border-b border-zinc-200 dark:border-zinc-800 flex items-center justify-between shrink-0">
-            <div>
-              <DialogTitle className="text-lg font-semibold">{presetEditingId ? "Edit Template Instan" : "Buat Template Instan"}</DialogTitle>
-              <DialogDescription className="sr-only">Atur ukuran kertas, overlay PNG, dan posisi letak jepretan kamera.</DialogDescription>
+            <div className="flex items-center gap-3.5">
+              <div>
+                <DialogTitle className="text-lg font-semibold">{presetEditingId ? "Edit Template Instan" : "Buat Template Instan"}</DialogTitle>
+                <DialogDescription className="sr-only">Atur ukuran kertas, overlay PNG, dan posisi letak jepretan kamera.</DialogDescription>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setSidebarOpen(!sidebarOpen)}
+                className="h-9 px-3 text-xs gap-1.5 border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-900 cursor-pointer rounded-lg shadow-sm"
+              >
+                <Sidebar className="w-4 h-4" />
+                <span>{sidebarOpen ? "Sembunyikan Panel" : "Tampilkan Panel"}</span>
+              </Button>
             </div>
             <Button
               type="button"
@@ -455,7 +467,11 @@ export default function PresetsTab({ config, addPresetTemplate, updatePresetTemp
           
           <div className="flex-1 overflow-hidden flex flex-col md:flex-row">
             {/* Panel Form Kiri */}
-            <div className="w-full md:w-[250px] lg:w-[360px] p-4 lg:p-6 overflow-y-auto border-b md:border-b-0 md:border-r border-zinc-200 dark:border-zinc-800 space-y-6 shrink-0 custom-scrollbar md:max-h-none">
+            <div className={`overflow-y-auto border-b md:border-b-0 md:border-r border-zinc-200 dark:border-zinc-800 space-y-6 shrink-0 custom-scrollbar md:max-h-none transition-all duration-300 ${
+              sidebarOpen 
+                ? "w-full md:w-[250px] lg:w-[320px] p-4 lg:p-6 opacity-100" 
+                : "w-0 p-0 opacity-0 border-none overflow-hidden pointer-events-none"
+            }`}>
               <form id="preset-form" onSubmit={handlePresetSubmit} className="space-y-6">
                 
                 <div className="space-y-3">
