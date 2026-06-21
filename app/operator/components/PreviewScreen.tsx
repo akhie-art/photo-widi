@@ -286,7 +286,7 @@ export default function PreviewScreen({
                       >
                         {/* Sticker Content */}
                         {isImg ? (
-                          <img src={asset.imageUrl} alt={asset.name} className="w-full h-auto pointer-events-none select-none" />
+                          <img src={asset.imageUrl} alt="Stiker" className="w-full h-auto pointer-events-none select-none" />
                         ) : (
                           <span 
                             style={{ fontSize: `${placed.scalePct * 0.85}cqw` }}
@@ -351,10 +351,10 @@ export default function PreviewScreen({
                     key={sticker.id}
                     onClick={() => addSticker(sticker.id)}
                     className="aspect-square bg-white hover:bg-blue-50/20 dark:bg-zinc-900 dark:hover:bg-blue-950/20 border border-zinc-200 dark:border-zinc-800 rounded-lg p-1.5 hover:border-blue-500/40 hover:scale-105 active:scale-95 transition-all duration-200 cursor-pointer flex items-center justify-center select-none shadow-sm"
-                    title={sticker.name}
+                    title="Stiker"
                   >
                     {isImg ? (
-                      <img src={sticker.imageUrl} alt={sticker.name} className="max-w-full max-h-full object-contain pointer-events-none" />
+                      <img src={sticker.imageUrl} alt="Stiker" className="max-w-full max-h-full object-contain pointer-events-none" />
                     ) : (
                       <span className="text-xl pointer-events-none">{sticker.imageUrl}</span>
                     )}

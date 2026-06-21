@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { Sparkles, Camera } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { PhotoStrip } from "../../hooks/usePhotoboothStore";
+import { PhotoStrip } from "../../../hooks/usePhotoboothStore";
 
 interface SlideshowOverlayProps {
   isOpen: boolean;

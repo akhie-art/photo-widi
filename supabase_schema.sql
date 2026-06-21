@@ -20,21 +20,21 @@ end;
 $$;
 
 
--- ── 1. Tabel konfigurasi event (1 baris saja, id = 'default') ────────────────
-create table if not exists event_config (
-  id          text primary key default 'default',
+-- ── 1. Tabel konfigurasi event (1 baris saja, id = '00000000-0000-0000-0000-000000000000') ────────────────
+create table if not exists booth_config (
+  id          uuid primary key default gen_random_uuid(),
   config_json jsonb not null,
   updated_at  timestamptz default now()
 );
 
-drop trigger if exists trg_event_config_updated_at on event_config;
-create trigger trg_event_config_updated_at
-  before update on event_config
+drop trigger if exists trg_booth_config_updated_at on booth_config;
+create trigger trg_booth_config_updated_at
+  before update on booth_config
   for each row execute function update_updated_at_column();
 
 -- ── 3. Tabel filter kamera ───────────────────────────────────────────────────
 create table if not exists filter_assets (
-  id          text primary key,
+  id          uuid primary key default gen_random_uuid(),
   name        text not null,
   css         text not null,
   created_at  timestamptz default now()
@@ -43,18 +43,21 @@ create table if not exists filter_assets (
 
 -- ── 4. Tabel stiker & emoji ──────────────────────────────────────────────────
 create table if not exists sticker_assets (
-  id          text primary key,
-  name        text not null,
+  id          uuid primary key default gen_random_uuid(),
   image_url   text not null,
   created_at  timestamptz default now()
 );
+
+-- Pastikan kolom name di sticker_assets dihapus jika tabel sudah dibuat sebelumnya
+alter table sticker_assets drop column if exists name;
 
 
 -- ── 5. Tabel template instan (presets) ──────────────────────────────────────
 --   Catatan:
 --   • force_layout: jika true, pilihan layout manual dikunci.
 create table if not exists preset_templates (
-  id               text primary key,
+  id               uuid primary key default gen_random_uuid(),
+  name             text,
   image_overlay    text,
   custom_slots     jsonb,
   overlay_x        numeric default 0,
@@ -74,7 +77,7 @@ create trigger trg_preset_templates_updated_at
   for each row execute function update_updated_at_column();
 
 -- Pastikan kolom layout overlay dan konfigurasi tambahan ditambahkan jika tabel preset_templates sudah ada sebelumnya
-alter table preset_templates drop column if exists name;
+alter table preset_templates add column if not exists name text;
 alter table preset_templates add column if not exists overlay_x numeric default 0;
 alter table preset_templates add column if not exists overlay_y numeric default 0;
 alter table preset_templates add column if not exists overlay_w numeric default 100;
@@ -86,7 +89,7 @@ alter table preset_templates add column if not exists paper_size text default '2
 -- ── 7. Tabel foto strip tamu ─────────────────────────────────────────────────
 --   Catatan: operator_name ditambahkan — digunakan oleh addPhoto() di store.
 create table if not exists photo_strips (
-  id             text primary key,
+  id             uuid primary key default gen_random_uuid(),
   data_url       text not null,
   customer_name  text,
   customer_phone text,
@@ -118,20 +121,20 @@ create index if not exists photo_strips_created_at_idx on photo_strips (created_
 -- operasi diizinkan melalui anon key. Sesuaikan jika menambahkan autentikasi.
 -- ════════════════════════════════════════════════════════════════════════════
 
-alter table event_config     enable row level security;
+alter table booth_config     enable row level security;
 alter table filter_assets    enable row level security;
 alter table sticker_assets   enable row level security;
 alter table preset_templates enable row level security;
 alter table photo_strips     enable row level security;
 
--- ── event_config ─────────────────────────────────────────────────────────────
-drop policy if exists "public read event_config"   on event_config;
-drop policy if exists "public upsert event_config" on event_config;
-drop policy if exists "public update event_config" on event_config;
+-- ── booth_config ─────────────────────────────────────────────────────────────
+drop policy if exists "public read booth_config"   on booth_config;
+drop policy if exists "public upsert booth_config" on booth_config;
+drop policy if exists "public update booth_config" on booth_config;
 
-create policy "public read event_config"   on event_config for select using (true);
-create policy "public upsert event_config" on event_config for insert with check (true);
-create policy "public update event_config" on event_config for update using (true);
+create policy "public read booth_config"   on booth_config for select using (true);
+create policy "public upsert booth_config" on booth_config for insert with check (true);
+create policy "public update booth_config" on booth_config for update using (true);
 
 
 -- ── filter_assets ────────────────────────────────────────────────────────────
@@ -183,12 +186,12 @@ create policy "public delete photo_strips" on photo_strips for delete using (tru
 -- Seeder Data Default
 -- ════════════════════════════════════════════════════════════════════════════
 
+-- Aktifkan ekstensi uuid-ossp untuk UUID generation
+create extension if not exists "uuid-ossp";
+
 -- ── Akun operator dan admin bawaan (Supabase Auth) ───────────────────────────
 -- Admin: admin@glowbooth.com / admin123
 -- Operator: ani@glowbooth.com / 1111
-
--- Aktifkan ekstensi uuid-ossp untuk UUID generation
-create extension if not exists "uuid-ossp";
 
 -- Hapus data lama agar bersih dan tidak bentrok
 delete from auth.identities where user_id in ('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a12');
@@ -326,17 +329,19 @@ BEGIN
 END $$;
 
 
+
+
 -- ── Filter kamera bawaan ──────────────────────────────────────────────────────
 insert into filter_assets (id, name, css)
 values
-  ('original', 'Original',     'none'),
-  ('bw',       'Retro B&W',    'grayscale(1) contrast(1.3) brightness(1.05)'),
-  ('vintage',  'Warm Film',    'sepia(0.4) contrast(1.1) saturate(1.1) brightness(0.95)'),
-  ('neon',     'Neon Glow',    'hue-rotate(240deg) saturate(1.8) brightness(1.1)'),
-  ('sepia',    'Sepia Dream',  'sepia(0.8) hue-rotate(-20deg) saturate(1.3)'),
-  ('cyber',    'Cyberpunk',    'hue-rotate(295deg) saturate(1.7) contrast(1.15)'),
-  ('pop',      'Pop Art',      'saturate(2.3) contrast(1.25)'),
-  ('noir',     'Classic Noir', 'grayscale(1) contrast(1.9) brightness(0.9)')
+  ('00000000-0000-0000-0000-000000000001', 'Original',     'none'),
+  ('00000000-0000-0000-0000-000000000002', 'Retro B&W',    'grayscale(1) contrast(1.3) brightness(1.05)'),
+  ('00000000-0000-0000-0000-000000000003', 'Warm Film',    'sepia(0.4) contrast(1.1) saturate(1.1) brightness(0.95)'),
+  ('00000000-0000-0000-0000-000000000004', 'Neon Glow',    'hue-rotate(240deg) saturate(1.8) brightness(1.1)'),
+  ('00000000-0000-0000-0000-000000000005', 'Sepia Dream',  'sepia(0.8) hue-rotate(-20deg) saturate(1.3)'),
+  ('00000000-0000-0000-0000-000000000006', 'Cyberpunk',    'hue-rotate(295deg) saturate(1.7) contrast(1.15)'),
+  ('00000000-0000-0000-0000-000000000007', 'Pop Art',      'saturate(2.3) contrast(1.25)'),
+  ('00000000-0000-0000-0000-000000000008', 'Classic Noir', 'grayscale(1) contrast(1.9) brightness(0.9)')
 on conflict (id) do update set
   name = excluded.name,
   css  = excluded.css;
@@ -443,7 +448,7 @@ create policy "Delete Access for Event Assets" on storage.objects
 
 
 -- ── 9e. Setup Supabase Storage Bucket 'booth-config' ─────────────────────────
--- Bucket khusus untuk menyimpan aset konfigurasi utama booth (tabel event_config):
+-- Bucket khusus untuk menyimpan aset konfigurasi utama booth (tabel booth_config):
 -- • Logo utama photobooth (logoUrl di config_json)
 -- • Barcode QRIS utama (qrisUrl di config_json)
 -- Dipisahkan dari event-assets agar konfigurasi default booth tidak bercampur
@@ -633,9 +638,9 @@ begin
   -- Tambahkan tabel ke publikasi realtime jika belum ada
   if not exists (
     select 1 from pg_publication_tables
-    where pubname = 'supabase_realtime' and tablename = 'event_config'
+    where pubname = 'supabase_realtime' and tablename = 'booth_config'
   ) then
-    alter publication supabase_realtime add table event_config;
+    alter publication supabase_realtime add table booth_config;
   end if;
 
   if not exists (
@@ -691,7 +696,8 @@ $$ language plpgsql;
 
 -- ── 12. Tabel Manajemen Event ───────────────────────────────────────────
 create table if not exists events (
-  id          text primary key,
+  id          uuid primary key default gen_random_uuid(),
+  slug        text unique not null,
   name        text not null,
   date        text,
   location    text,
@@ -702,14 +708,19 @@ create table if not exists events (
   allowed_presets text[] default '{}',
   allowed_filters text[] default '{}',
   allowed_stickers text[] default '{}',
+  bg_theme    text default 'sunset',
   created_at  timestamptz default now(),
   updated_at  timestamptz default now()
 );
 
 -- Pastikan kolom baru ditambahkan jika tabel events sudah ada sebelumnya
+alter table events add column if not exists slug text unique;
 alter table events add column if not exists allowed_presets text[] default '{}';
 alter table events add column if not exists allowed_filters text[] default '{}';
 alter table events add column if not exists allowed_stickers text[] default '{}';
+alter table events add column if not exists bg_theme text default 'sunset';
+alter table events add column if not exists show_payment boolean default true;
+alter table events add column if not exists show_setup boolean default true;
 
 alter table events enable row level security;
 drop policy if exists "public read events" on events;
@@ -734,4 +745,191 @@ begin
     alter publication supabase_realtime add table events;
   end if;
 end $$;
+
+
+-- ── 13. Tabel UI/UX Templates ───────────────────────────────────────────
+create table if not exists ui_templates (
+  id uuid primary key default gen_random_uuid(),
+  name text not null,
+  bg_theme text default 'sunset',
+  font_style text default 'inter',
+  welcome_text text,
+  footer_text text,
+  show_payment boolean default true,
+  show_setup boolean default true,
+  mirror_default boolean default true,
+  countdown_duration integer default 3,
+  allowed_layouts text[] default '{"strip"}',
+  logo_url text,
+  qris_url text,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+
+alter table ui_templates enable row level security;
+drop policy if exists "public read ui_templates" on ui_templates;
+drop policy if exists "public insert ui_templates" on ui_templates;
+drop policy if exists "public update ui_templates" on ui_templates;
+drop policy if exists "public delete ui_templates" on ui_templates;
+create policy "public read ui_templates" on ui_templates for select using (true);
+create policy "public insert ui_templates" on ui_templates for insert with check (true);
+create policy "public update ui_templates" on ui_templates for update using (true);
+create policy "public delete ui_templates" on ui_templates for delete using (true);
+
+-- Tambahkan kolom ui_template_id ke tabel events
+alter table events add column if not exists ui_template_id uuid references ui_templates(id) on delete set null;
+
+-- Tambahkan table ui_templates ke publikasi realtime jika belum ada
+do $$
+begin
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime' and tablename = 'ui_templates'
+  ) then
+    alter publication supabase_realtime add table ui_templates;
+  end if;
+end $$;
+
+
+-- ── 13b. Tabel UI/UX Components ───────────────────────────────────────────
+create table if not exists ui_components (
+  id uuid primary key default gen_random_uuid(),
+  ui_template_id uuid references ui_templates(id) on delete cascade,
+  component_id text not null,
+  properties jsonb not null default '{}'::jsonb,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now(),
+  unique(ui_template_id, component_id)
+);
+
+alter table ui_components enable row level security;
+drop policy if exists "public read ui_components" on ui_components;
+drop policy if exists "public insert ui_components" on ui_components;
+drop policy if exists "public update ui_components" on ui_components;
+drop policy if exists "public delete ui_components" on ui_components;
+create policy "public read ui_components" on ui_components for select using (true);
+create policy "public insert ui_components" on ui_components for insert with check (true);
+create policy "public update ui_components" on ui_components for update using (true);
+create policy "public delete ui_components" on ui_components for delete using (true);
+
+-- Tambahkan table ui_components ke publikasi realtime jika belum ada
+do $$
+begin
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime' and tablename = 'ui_components'
+  ) then
+    alter publication supabase_realtime add table ui_components;
+  end if;
+end $$;
+
+
+
+-- ── 14. Seed Default Preset Templates (Sekolah, Wisuda, Wedding) ──────────────
+insert into preset_templates (id, name, custom_slots, force_layout, paper_size)
+values 
+  ('8b1d3d63-b8e7-4f67-8e68-e4b78fa7b2a1', 'Sekolah', '[{"id": "slot_sekolah_1", "xPct": 5, "yPct": 2, "widthPct": 90, "heightPct": 20.8, "rotation": 0}, {"id": "slot_sekolah_2", "xPct": 5, "yPct": 24.3, "widthPct": 90, "heightPct": 20.8, "rotation": 0}, {"id": "slot_sekolah_3", "xPct": 5, "yPct": 46.6, "widthPct": 90, "heightPct": 20.8, "rotation": 0}, {"id": "slot_sekolah_4", "xPct": 5, "yPct": 68.9, "widthPct": 90, "heightPct": 20.8, "rotation": 0}]'::jsonb, true, '2R'),
+  ('9c2e4e74-c9f8-5a78-9f79-f5c89fb8c3b2', 'Wisuda', '[{"id": "slot_wisuda_1", "xPct": 5, "yPct": 5, "widthPct": 43, "heightPct": 38, "rotation": 0}, {"id": "slot_wisuda_2", "xPct": 52, "yPct": 5, "widthPct": 43, "heightPct": 38, "rotation": 0}, {"id": "slot_wisuda_3", "xPct": 5, "yPct": 47, "widthPct": 43, "heightPct": 38, "rotation": 0}, {"id": "slot_wisuda_4", "xPct": 52, "yPct": 47, "widthPct": 43, "heightPct": 38, "rotation": 0}]'::jsonb, true, '4R'),
+  ('0d3f5f85-da09-6b89-0fa0-06d9afc9d4c3', 'Wedding', '[{"id": "slot_wedding_1", "xPct": 5, "yPct": 3, "widthPct": 90, "heightPct": 23.6, "rotation": 0}, {"id": "slot_wedding_2", "xPct": 5, "yPct": 28.6, "widthPct": 90, "heightPct": 23.6, "rotation": 0}, {"id": "slot_wedding_3", "xPct": 5, "yPct": 54.2, "widthPct": 90, "heightPct": 23.6, "rotation": 0}]'::jsonb, true, '2R')
+on conflict (id) do update set
+  name = excluded.name,
+  custom_slots = excluded.custom_slots,
+  force_layout = excluded.force_layout,
+  paper_size = excluded.paper_size;
+
+
+-- ── 15. Seed Default UI/UX Templates (Sekolah, Wisuda, Wedding) ────────────────
+insert into ui_templates (id, name, bg_theme, font_style, welcome_text, footer_text, show_payment, show_setup, mirror_default, countdown_duration, allowed_layouts, logo_url, qris_url)
+values
+  (
+    '8a3b5c6d-7e8f-9a0b-1c2d-3e4f5a6b7c8d', 
+    'Royal Wedding (Dekorasi Full)', 
+    'romantic', 
+    'playfair', 
+    'Silakan isi data kunjungan Anda untuk memasuki resepsi pernikahan kami dan mengabadikan momen bahagia ini.', 
+    'Happy Wedding • Powered by Glowbooth', 
+    true, 
+    true, 
+    true, 
+    3, 
+    '{"Wedding"}', 
+    '', 
+    ''
+  ),
+  (
+    '7b2c8d9e-1f2a-3b4c-5d6e-7f8a9b0c1d2e', 
+    'Sekolah Ceria (Fun & Colorful)', 
+    'sunset', 
+    'outfit', 
+    'Halo Teman-Teman! Selamat datang di Photobooth Sekolah. Masukkan nama dan kelasmu untuk mencetak foto keseruan hari ini!', 
+    'Pesta Sekolah • Powered by Glowbooth', 
+    false, 
+    true, 
+    true, 
+    3, 
+    '{"Sekolah"}', 
+    '', 
+    ''
+  ),
+  (
+    '9a0b1c2d-3e4f-5a6b-7c8d-9e0f1a2b3c4d', 
+    'Wisuda Akbar (Classic & Elegant)', 
+    'luxury', 
+    'cabinet', 
+    'Selamat atas kelulusan Anda! Silakan masukkan nama dan gelar lengkap untuk mencetak foto kenangan kelulusan resmi.', 
+    'Graduation Day • Powered by Glowbooth', 
+    true, 
+    true, 
+    true, 
+    5, 
+    '{"Wisuda"}', 
+    '', 
+    ''
+  )
+on conflict (id) do update set
+  name = excluded.name,
+  bg_theme = excluded.bg_theme,
+  font_style = excluded.font_style,
+  welcome_text = excluded.welcome_text,
+  footer_text = excluded.footer_text,
+  show_payment = excluded.show_payment,
+  show_setup = excluded.show_setup,
+  mirror_default = excluded.mirror_default,
+  countdown_duration = excluded.countdown_duration,
+  allowed_layouts = excluded.allowed_layouts,
+  logo_url = excluded.logo_url,
+  qris_url = excluded.qris_url;
+
+
+-- ── 15b. Seed Default UI/UX Components ───────────────────────────────────────
+insert into ui_components (ui_template_id, component_id, properties)
+values
+  -- Wedding Components
+  ('8a3b5c6d-7e8f-9a0b-1c2d-3e4f5a6b7c8d', 'logo', '{"hideLogo": true, "logoSize": "md"}'),
+  ('8a3b5c6d-7e8f-9a0b-1c2d-3e4f5a6b7c8d', 'welcomeText', '{"hideWelcomeText": false, "welcomeTextSize": "lg", "welcomeTextAlignment": "center", "customWelcomeTextColor": "#e11d48", "couplePhotoUrl": "/wedding-couple.png"}'),
+  ('8a3b5c6d-7e8f-9a0b-1c2d-3e4f5a6b7c8d', 'formRegistrasi', '{"hideFormRegistrasi": false, "visitorFormLabel": "DATA TAMU UNDANGAN", "customerNameLabel": "Nama Undangan", "customerPhoneLabel": "Nomor WhatsApp", "sessionsCountLabel": "Jumlah Cetak", "formCardPadding": "lg", "inputBgStyle": "white", "cardBorderRadius": "2xl", "cardShadow": "2xl", "cardStyle": "frameless"}'),
+  ('8a3b5c6d-7e8f-9a0b-1c2d-3e4f5a6b7c8d', 'startBtn', '{"hideStartBtn": false, "startButtonText": "Masuk & Mulai Sesi Foto ✨", "startButtonSize": "lg", "primaryColor": "#e11d48", "buttonStyle": "gradient", "customButtonTextColor": "#ffffff"}'),
+  ('8a3b5c6d-7e8f-9a0b-1c2d-3e4f5a6b7c8d', 'footerText', '{"hideFooterText": false}'),
+  ('8a3b5c6d-7e8f-9a0b-1c2d-3e4f5a6b7c8d', 'qrisUpload', '{}'),
+  ('8a3b5c6d-7e8f-9a0b-1c2d-3e4f5a6b7c8d', 'customCard', '{"showCustomCard": false, "customCardTitle": "Info Kustom", "customCardContent": "Silakan ketik petunjuk atau informasi tambahan di sini."}'),
+
+  -- Sekolah Components
+  ('7b2c8d9e-1f2a-3b4c-5d6e-7f8a9b0c1d2e', 'logo', '{"hideLogo": false, "logoSize": "md"}'),
+  ('7b2c8d9e-1f2a-3b4c-5d6e-7f8a9b0c1d2e', 'welcomeText', '{"hideWelcomeText": false, "welcomeTextSize": "md", "welcomeTextAlignment": "center", "customWelcomeTextColor": "#ea580c"}'),
+  ('7b2c8d9e-1f2a-3b4c-5d6e-7f8a9b0c1d2e', 'formRegistrasi', '{"hideFormRegistrasi": false, "visitorFormLabel": "DATA SISWA / GURU", "customerNameLabel": "Nama Lengkap / Panggilan", "customerPhoneLabel": "Kelas / NISN", "sessionsCountLabel": "Jumlah Cetak", "formCardPadding": "md", "inputBgStyle": "tinted", "cardBorderRadius": "lg", "cardShadow": "md", "cardStyle": "neobrutalist"}'),
+  ('7b2c8d9e-1f2a-3b4c-5d6e-7f8a9b0c1d2e', 'startBtn', '{"hideStartBtn": false, "startButtonText": "Mulai Foto Seru! 🚀", "startButtonSize": "md", "primaryColor": "#ea580c", "buttonStyle": "solid", "customButtonTextColor": "#ffffff"}'),
+  ('7b2c8d9e-1f2a-3b4c-5d6e-7f8a9b0c1d2e', 'footerText', '{"hideFooterText": false}'),
+  ('7b2c8d9e-1f2a-3b4c-5d6e-7f8a9b0c1d2e', 'qrisUpload', '{}'),
+  ('7b2c8d9e-1f2a-3b4c-5d6e-7f8a9b0c1d2e', 'customCard', '{"showCustomCard": false, "customCardTitle": "Info Kustom", "customCardContent": "Silakan ketik petunjuk atau informasi tambahan di sini."}'),
+
+  -- Wisuda Components
+  ('9a0b1c2d-3e4f-5a6b-7c8d-9e0f1a2b3c4d', 'logo', '{"hideLogo": false, "logoSize": "lg"}'),
+  ('9a0b1c2d-3e4f-5a6b-7c8d-9e0f1a2b3c4d', 'welcomeText', '{"hideWelcomeText": false, "welcomeTextSize": "lg", "welcomeTextAlignment": "center", "customWelcomeTextColor": "#d97706"}'),
+  ('9a0b1c2d-3e4f-5a6b-7c8d-9e0f1a2b3c4d', 'formRegistrasi', '{"hideFormRegistrasi": false, "visitorFormLabel": "REGISTRASI WISUDAWAN", "customerNameLabel": "Nama Lengkap & Gelar", "customerPhoneLabel": "Nomor WhatsApp", "sessionsCountLabel": "Jumlah Cetak", "formCardPadding": "lg", "inputBgStyle": "white", "cardBorderRadius": "xl", "cardShadow": "xl", "cardStyle": "glass"}'),
+  ('9a0b1c2d-3e4f-5a6b-7c8d-9e0f1a2b3c4d', 'startBtn', '{"hideStartBtn": false, "startButtonText": "Mulai Foto Wisuda 🎓", "startButtonSize": "lg", "primaryColor": "#d97706", "buttonStyle": "gradient", "customButtonTextColor": "#ffffff"}'),
+  ('9a0b1c2d-3e4f-5a6b-7c8d-9e0f1a2b3c4d', 'footerText', '{"hideFooterText": false}'),
+  ('9a0b1c2d-3e4f-5a6b-7c8d-9e0f1a2b3c4d', 'qrisUpload', '{}'),
+  ('9a0b1c2d-3e4f-5a6b-7c8d-9e0f1a2b3c4d', 'customCard', '{"showCustomCard": true, "customCardTitle": "Pengambilan Foto", "customCardContent": "Setelah berfoto selesai, silakan ambil cetakan foto di meja penyerahan souvenir luar aula.", "cardStyle": "glass"}')
+on conflict (ui_template_id, component_id) do update set
+  properties = excluded.properties;
 

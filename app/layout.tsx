@@ -19,11 +19,18 @@ const geistMono = Geist_Mono({
 
 export async function generateMetadata(): Promise<Metadata> {
   try {
-    const { data: cfgRow } = await supabase
-      .from("event_config")
+    // Fail quick (1.5s timeout) if Supabase is unreachable/offline to prevent Next.js from hanging
+    const fetchPromise = supabase
+      .from("booth_config")
       .select("config_json")
-      .eq("id", "default")
+      .eq("id", "00000000-0000-0000-0000-000000000000")
       .single();
+
+    const timeoutPromise = new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error("Supabase timeout")), 1500)
+    );
+
+    const { data: cfgRow } = await Promise.race([fetchPromise, timeoutPromise]) as any;
 
     const config = cfgRow?.config_json as any;
     const eventName = config?.eventName?.trim();
@@ -86,7 +93,17 @@ export default function RootLayout({
           `}
         </Script>
         <Script id="register-sw" strategy="afterInteractive">
-          {`
+          {process.env.NODE_ENV === "development" ? `
+            if ('serviceWorker' in navigator) {
+              navigator.serviceWorker.getRegistrations().then(function(registrations) {
+                for (let registration of registrations) {
+                  registration.unregister().then(function(success) {
+                    if (success) console.log('SW unregistered in development mode.');
+                  });
+                }
+              });
+            }
+          ` : `
             if ('serviceWorker' in navigator) {
               window.addEventListener('load', function() {
                 navigator.serviceWorker.register('/sw.js').then(

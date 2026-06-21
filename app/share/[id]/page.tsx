@@ -20,6 +20,7 @@ interface PhotoStripData {
   timestamp: string | null;
   created_at: string;
   captured_photos?: string[] | null;
+  event_name?: string | null;
 }
 
 interface AssetItem {
@@ -30,6 +31,97 @@ interface AssetItem {
   filename: string;
   thumbnail: string | null;
 }
+
+const THEME_GLOWS = {
+  sunset: {
+    topLeft: "bg-amber-400/20 dark:bg-amber-500/15",
+    bottomRight: "bg-pink-400/20 dark:bg-pink-500/15",
+  },
+  neon: {
+    topLeft: "bg-fuchsia-400/20 dark:bg-fuchsia-500/15",
+    bottomRight: "bg-cyan-400/20 dark:bg-cyan-500/15",
+  },
+  luxury: {
+    topLeft: "bg-yellow-500/20 dark:bg-yellow-600/15",
+    bottomRight: "bg-amber-500/20 dark:bg-amber-600/15",
+  },
+  romantic: {
+    topLeft: "bg-rose-400/20 dark:bg-rose-500/15",
+    bottomRight: "bg-pink-400/20 dark:bg-pink-500/15",
+  },
+  emerald: {
+    topLeft: "bg-emerald-400/20 dark:bg-emerald-500/15",
+    bottomRight: "bg-teal-400/20 dark:bg-teal-500/15",
+  },
+};
+
+const getFontFamilyName = (f: string) => {
+  switch (f) {
+    case "outfit": return "'Outfit', sans-serif";
+    case "syne": return "'Syne', sans-serif";
+    case "playfair": return "'Playfair Display', serif";
+    case "cabinet": return "'Cabinet Grotesk', sans-serif";
+    case "inter":
+    default:
+      return "'Inter', sans-serif";
+  }
+};
+
+const getBorderRadiusClass = (radius?: string) => {
+  switch (radius) {
+    case "none": return "rounded-none";
+    case "sm": return "rounded-sm";
+    case "md": return "rounded-md";
+    case "lg": return "rounded-xl";
+    case "xl": return "rounded-2xl";
+    case "2xl":
+    default:
+      return "rounded-[28px]";
+  }
+};
+
+const getShadowClass = (shadow?: string) => {
+  switch (shadow) {
+    case "none": return "shadow-none";
+    case "sm": return "shadow-sm";
+    case "md": return "shadow-md";
+    case "lg": return "shadow-lg";
+    case "xl": return "shadow-xl";
+    case "2xl":
+    default:
+      return "shadow-2xl";
+  }
+};
+
+const isColorLight = (color?: string) => {
+  if (!color) return false;
+  const hex = color.replace("#", "");
+  if (hex.length !== 6) return false;
+  const r = parseInt(hex.substring(0, 2), 16);
+  const g = parseInt(hex.substring(2, 4), 16);
+  const b = parseInt(hex.substring(4, 6), 16);
+  const brightness = (r * 299 + g * 587 + b * 114) / 1000;
+  return brightness > 155;
+};
+
+const adjustColorBrightness = (col: string, amt: number) => {
+  let usePound = false;
+  if (col[0] === "#") {
+    col = col.slice(1);
+    usePound = true;
+  }
+  const num = parseInt(col, 16);
+  let r = (num >> 16) + amt;
+  if (r > 255) r = 255;
+  else if (r < 0) r = 0;
+  let b = ((num >> 8) & 0x00FF) + amt;
+  if (b > 255) b = 255;
+  else if (b < 0) b = 0;
+  let g = (num & 0x0000FF) + amt;
+  if (g > 255) g = 255;
+  else if (g < 0) g = 0;
+  return (usePound ? "#" : "") + (g | (b << 8) | (r << 16)).toString(16).padStart(6, "0");
+};
 
 export default function PublicSharePage() {
   const params = useParams();
@@ -46,6 +138,8 @@ export default function PublicSharePage() {
 
   const [selectedAssetForZoom, setSelectedAssetForZoom] = useState<AssetItem | null>(null);
   const [eventName, setEventName] = useState<string>("Glow Photobooth");
+  const [customization, setCustomization] = useState<any>(null);
+  const [eventConfig, setEventConfig] = useState<any>(null);
 
   // Fetch Photo Strip from Supabase
   useEffect(() => {
@@ -75,29 +169,116 @@ export default function PublicSharePage() {
     fetchPhoto();
   }, [id]);
 
-  // Fetch Event Name from Supabase (event_config)
+  // Fetch event-specific customization and template properties
   useEffect(() => {
-    const fetchEventConfig = async () => {
-      try {
-        const { data, error } = await supabase
-          .from("event_config")
-          .select("config_json")
-          .eq("id", "default")
-          .single();
+    if (!photoData) return;
 
-        if (!error && data && data.config_json) {
-          const config = data.config_json as any;
-          if (config.eventName && config.eventName.trim()) {
-            setEventName(config.eventName.trim());
+    const fetchCustomization = async () => {
+      try {
+        let eventFound = false;
+
+        const photoEventName = photoData.event_name;
+        if (photoEventName) {
+          const { data: event, error: eventErr } = await supabase
+            .from("events")
+            .select("*")
+            .eq("name", photoEventName)
+            .limit(1)
+            .maybeSingle();
+
+          if (!eventErr && event) {
+            eventFound = true;
+            setEventName(event.name);
+
+            if (event.ui_template_id) {
+              const [tempRes, compsRes] = await Promise.all([
+                supabase.from("ui_templates").select("*").eq("id", event.ui_template_id).single(),
+                supabase.from("ui_components").select("*").eq("ui_template_id", event.ui_template_id)
+              ]);
+
+              const template = tempRes.data;
+              const comps = compsRes.data;
+
+              if (template) {
+                setEventConfig({
+                  bgTheme: template.bg_theme || "sunset",
+                  fontStyle: template.font_style || "inter",
+                  logoUrl: template.logo_url || event.logo_url || "",
+                });
+
+                const customizationData: any = {};
+                if (comps) {
+                  comps.forEach(c => {
+                    Object.assign(customizationData, c.properties);
+                  });
+                }
+                setCustomization(customizationData);
+              }
+            } else {
+              setEventConfig({
+                bgTheme: event.bg_theme || "sunset",
+                fontStyle: "inter",
+                logoUrl: event.logo_url || "",
+              });
+              setCustomization(null);
+            }
+          }
+        }
+
+        // Fallback to default booth config if no matching event is found
+        if (!eventFound) {
+          const { data: cfgRow, error: cfgErr } = await supabase
+            .from("booth_config")
+            .select("config_json")
+            .eq("id", "00000000-0000-0000-0000-000000000000")
+            .single();
+
+          if (!cfgErr && cfgRow && cfgRow.config_json) {
+            const config = cfgRow.config_json as any;
+            if (config.eventName && config.eventName.trim()) {
+              setEventName(config.eventName.trim());
+            }
+            setEventConfig({
+              bgTheme: config.bgTheme || "sunset",
+              fontStyle: config.fontStyle || "inter",
+              logoUrl: config.logoUrl || "",
+            });
+            setCustomization(null);
           }
         }
       } catch (err) {
-        console.error("Failed to query event config:", err);
+        console.error("Gagal memuat kustomisasi halaman share:", err);
       }
     };
 
-    fetchEventConfig();
-  }, []);
+    fetchCustomization();
+  }, [photoData]);
+
+  // Dynamic Font Loader
+  useEffect(() => {
+    if (typeof window === "undefined" || !eventConfig?.fontStyle) return;
+    const fontId = "dynamic-share-font";
+    let linkElement = document.getElementById(fontId) as HTMLLinkElement;
+    if (!linkElement) {
+      linkElement = document.createElement("link");
+      linkElement.id = fontId;
+      linkElement.rel = "stylesheet";
+      document.head.appendChild(linkElement);
+    }
+    
+    const getFontUrl = (f: string) => {
+      switch (f) {
+        case "outfit": return "https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap";
+        case "syne": return "https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&display=swap";
+        case "playfair": return "https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400&display=swap";
+        case "cabinet": return "https://api.fontshare.com/v2/css?f[]=cabinet-grotesk@800,700,400,300&display=swap";
+        case "inter":
+        default:
+          return "https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap";
+      }
+    };
+    linkElement.href = getFontUrl(eventConfig.fontStyle);
+  }, [eventConfig?.fontStyle]);
 
   const capturedPhotos = useMemo(() => {
     return photoData?.captured_photos || [];
@@ -235,30 +416,66 @@ export default function PublicSharePage() {
     }
   };
 
+  const getButtonStyle = (isPrimaryButton = false) => {
+    const styles: React.CSSProperties = {};
+    if (customization?.primaryColor) {
+      if (customization.buttonStyle === "outline") {
+        styles.border = `2px solid ${customization.primaryColor}`;
+        styles.color = customization.primaryColor;
+        styles.backgroundColor = "transparent";
+      } else if (customization.buttonStyle === "gradient") {
+        styles.backgroundImage = `linear-gradient(to right, ${customization.primaryColor}, ${adjustColorBrightness(customization.primaryColor, -30)})`;
+        styles.color = customization.customButtonTextColor || (isColorLight(customization.primaryColor) ? "#09090b" : "#ffffff");
+        styles.border = "none";
+      } else {
+        styles.backgroundColor = customization.primaryColor;
+        styles.color = customization.customButtonTextColor || (isColorLight(customization.primaryColor) ? "#09090b" : "#ffffff");
+        styles.border = "none";
+      }
+    } else if (isPrimaryButton) {
+      styles.backgroundImage = "linear-gradient(to right, #059669, #0d9488)";
+      styles.color = "#ffffff";
+      styles.border = "none";
+    }
+    return styles;
+  };
+
+  const bgTheme = eventConfig?.bgTheme || "sunset";
+  const themeGlow = THEME_GLOWS[bgTheme as keyof typeof THEME_GLOWS] || THEME_GLOWS.sunset;
+
   return (
-    <div className="flex-1 bg-[#fbfbfb] dark:bg-[#0b0b0c] text-zinc-800 dark:text-[#e3e3e3] font-sans flex flex-col justify-between overflow-x-hidden min-h-screen relative transition-colors duration-300">
+    <div className="flex-1 bg-[#fbfbfb] dark:bg-[#0b0b0c] text-zinc-800 dark:text-[#e3e3e3] flex flex-col justify-between overflow-x-hidden min-h-screen relative transition-colors duration-300"
+         style={{ fontFamily: getFontFamilyName(eventConfig?.fontStyle || 'inter') }}>
       {/* Visual Ambient Background Glows */}
-      <div className="absolute top-[-10%] left-[-10%] w-[50%] aspect-square rounded-full bg-amber-400/8 dark:bg-amber-500/5 blur-[120px] pointer-events-none z-0" />
-      <div className="absolute bottom-[-10%] right-[-10%] w-[50%] aspect-square rounded-full bg-pink-400/8 dark:bg-pink-500/5 blur-[120px] pointer-events-none z-0" />
+      <div className={`absolute top-[-10%] left-[-10%] w-[50%] aspect-square rounded-full blur-[120px] pointer-events-none z-0 animate-pulse ${themeGlow.topLeft}`} style={{ animationDuration: '8s' }} />
+      <div className={`absolute bottom-[-10%] right-[-10%] w-[50%] aspect-square rounded-full blur-[120px] pointer-events-none z-0 animate-pulse ${themeGlow.bottomRight}`} style={{ animationDuration: '10s' }} />
 
       {/* Main Container */}
       <main className="flex-1 flex flex-col w-full z-10 relative p-4 sm:p-6 md:p-8">
         {isLoading ? (
           <div className="flex-1 flex flex-col items-center justify-center gap-3 text-zinc-500 font-mono text-xs">
-            <Loader2 className="w-8 h-8 text-emerald-500 animate-spin" />
+            <Loader2 className="w-8 h-8 text-emerald-500 animate-spin" style={customization?.primaryColor ? { color: customization.primaryColor } : undefined} />
             <span>Memuat Kenangan Indah Anda...</span>
           </div>
         ) : photoData ? (
           <div className="w-full flex-1 flex flex-col justify-between transition-all">
             {/* Header / Nav Panel */}
             <div className="w-full flex items-center justify-between mb-6">
-              <div className="flex flex-col text-left">
-                <h1 className="text-xl sm:text-2xl font-bold tracking-tight bg-gradient-to-r from-zinc-900 via-zinc-800 to-zinc-700 dark:from-white dark:via-zinc-200 dark:to-zinc-400 bg-clip-text text-transparent">
-                  {eventName}
-                </h1>
-                <p className="text-xs text-zinc-400 dark:text-zinc-500 font-medium">
-                  Unduh dan simpan momen spesial Anda
-                </p>
+              <div className="flex items-center gap-3">
+                {!customization?.hideLogo && eventConfig?.logoUrl && (
+                  <div className="w-10 h-10 rounded-xl overflow-hidden bg-zinc-50 dark:bg-zinc-950 flex items-center justify-center border border-zinc-200/50 dark:border-zinc-800/40 shrink-0 shadow-sm"
+                       style={customization?.primaryColor ? { borderColor: `${customization.primaryColor}30` } : undefined}>
+                    <img src={eventConfig.logoUrl} alt="Logo" className="w-full h-full object-contain" />
+                  </div>
+                )}
+                <div className="flex flex-col text-left">
+                  <h1 className="text-xl sm:text-2xl font-bold tracking-tight bg-gradient-to-r from-zinc-900 via-zinc-800 to-zinc-700 dark:from-white dark:via-zinc-200 dark:to-zinc-400 bg-clip-text text-transparent">
+                    {eventName}
+                  </h1>
+                  <p className="text-xs text-zinc-400 dark:text-zinc-500 font-medium">
+                    Unduh dan simpan momen spesial Anda
+                  </p>
+                </div>
               </div>
               
               <Button
@@ -266,6 +483,11 @@ export default function PublicSharePage() {
                 size="sm"
                 onClick={() => router.push("/")}
                 className="text-xs text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-100 flex items-center gap-1.5 rounded-xl border border-zinc-200/50 dark:border-zinc-800/80 bg-white/50 dark:bg-zinc-900/50 backdrop-blur-sm shadow-sm"
+                style={{
+                  ...getBorderRadiusClass(customization?.cardBorderRadius) === "rounded-xl" ? { borderRadius: "12px" } :
+                     getBorderRadiusClass(customization?.cardBorderRadius) === "rounded-2xl" ? { borderRadius: "16px" } :
+                     getBorderRadiusClass(customization?.cardBorderRadius) === "rounded-[28px]" ? { borderRadius: "20px" } : {}
+                }}
               >
                 <ArrowLeft className="w-3.5 h-3.5" />
                 <span>Beranda</span>
@@ -273,9 +495,20 @@ export default function PublicSharePage() {
             </div>
             
             {/* Global Actions Panel (ZIP Download) */}
-            <div className="w-full bg-zinc-50/50 dark:bg-zinc-950/20 border border-zinc-100 dark:border-zinc-900/80 rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-4 mb-6">
+            <div className={`w-full bg-zinc-50/50 dark:bg-zinc-950/20 border border-zinc-100 dark:border-zinc-900/80 p-4 flex flex-col sm:flex-row items-center justify-between gap-4 mb-6 ${
+              getBorderRadiusClass(customization?.cardBorderRadius)
+            } ${
+              getShadowClass(customization?.cardShadow)
+            }`}
+            style={customization?.primaryColor ? { borderColor: `${customization.primaryColor}20` } : undefined}>
               <div className="flex items-center gap-3 w-full sm:w-auto">
-                <div className="w-10 h-10 rounded-xl bg-emerald-50 dark:bg-emerald-950/20 flex items-center justify-center text-emerald-600 dark:text-emerald-400 border border-emerald-100 dark:border-emerald-900/30 shrink-0">
+                <div className="w-10 h-10 bg-emerald-50 dark:bg-emerald-950/20 flex items-center justify-center text-emerald-600 dark:text-emerald-400 border border-emerald-100 dark:border-emerald-900/30 shrink-0"
+                     style={{
+                       ...getBorderRadiusClass(customization?.cardBorderRadius) === "rounded-xl" ? { borderRadius: "12px" } :
+                          getBorderRadiusClass(customization?.cardBorderRadius) === "rounded-2xl" ? { borderRadius: "16px" } :
+                          getBorderRadiusClass(customization?.cardBorderRadius) === "rounded-[28px]" ? { borderRadius: "20px" } : {},
+                       ...(customization?.primaryColor ? { color: customization.primaryColor, borderColor: `${customization.primaryColor}30`, backgroundColor: `${customization.primaryColor}10` } : {})
+                     }}>
                   <ImageIcon className="w-5 h-5" />
                 </div>
                 <div className="flex flex-col text-left">
@@ -290,7 +523,15 @@ export default function PublicSharePage() {
               <Button
                 onClick={handleDownloadZip}
                 disabled={isZipLoading || assets.length === 0}
-                className="w-full sm:w-auto bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-semibold py-3 px-6 rounded-xl transition-all text-xs tracking-wider flex items-center justify-center gap-1.5 shadow-lg shadow-emerald-500/20 hover:scale-[1.01] active:scale-[0.99] border-none cursor-pointer"
+                className="w-full sm:w-auto font-semibold py-3 px-6 transition-all text-xs tracking-wider flex items-center justify-center gap-1.5 shadow-lg hover:scale-[1.01] active:scale-[0.99] border-none cursor-pointer"
+                style={{
+                  ...getButtonStyle(true),
+                  borderRadius: getBorderRadiusClass(customization?.cardBorderRadius) === "rounded-none" ? "0" :
+                                getBorderRadiusClass(customization?.cardBorderRadius) === "rounded-sm" ? "2px" :
+                                getBorderRadiusClass(customization?.cardBorderRadius) === "rounded-md" ? "6px" :
+                                getBorderRadiusClass(customization?.cardBorderRadius) === "rounded-xl" ? "12px" :
+                                getBorderRadiusClass(customization?.cardBorderRadius) === "rounded-2xl" ? "16px" : "20px"
+                }}
               >
                 {isZipLoading ? (
                   <>
@@ -315,18 +556,26 @@ export default function PublicSharePage() {
               {assets.map((asset) => (
                 <div
                   key={asset.id}
-                  className="group flex flex-col justify-between bg-white dark:bg-zinc-950 ring-1 ring-inset ring-zinc-200/80 dark:ring-zinc-800/60 rounded-2xl overflow-hidden shadow-[0_4px_20px_rgb(0,0,0,0.01)] transition-all duration-300"
+                  className={`group flex flex-col justify-between bg-white dark:bg-zinc-950 border transition-all duration-300 ${
+                    getBorderRadiusClass(customization?.cardBorderRadius)
+                  } ${
+                    getShadowClass(customization?.cardShadow)
+                  }`}
+                  style={customization?.primaryColor ? { borderColor: `${customization.primaryColor}20` } : { borderColor: "rgba(228, 228, 231, 0.6)" }}
                 >
                   {/* Media Container */}
                   <div className="p-2.5 bg-zinc-50/60 dark:bg-zinc-900/20 flex-1 flex flex-col items-center justify-center">
                     <div
-                      className="relative w-full aspect-square rounded-xl overflow-hidden bg-zinc-100 dark:bg-zinc-900 ring-1 ring-zinc-200 dark:ring-zinc-800 flex items-center justify-center transition-transform duration-300 group-hover:scale-[1.015] cursor-zoom-in"
+                      className={`relative w-full aspect-square overflow-hidden bg-zinc-100 dark:bg-zinc-900 border flex items-center justify-center transition-transform duration-300 group-hover:scale-[1.015] cursor-zoom-in ${
+                        getBorderRadiusClass(customization?.cardBorderRadius)
+                      }`}
+                      style={customization?.primaryColor ? { borderColor: `${customization.primaryColor}20` } : { borderColor: "rgba(228, 228, 231, 0.6)" }}
                       onClick={() => setSelectedAssetForZoom(asset)}
                     >
                       {asset.type === "video" ? (
                         isVideoLoading ? (
                           <div className="flex flex-col items-center gap-2 text-zinc-400">
-                            <Loader2 className="w-5 h-5 animate-spin text-emerald-500" />
+                            <Loader2 className="w-5 h-5 animate-spin text-emerald-500" style={customization?.primaryColor ? { color: customization.primaryColor } : undefined} />
                             <span className="text-[9px] font-mono">Memuat video...</span>
                           </div>
                         ) : asset.url ? (
@@ -340,7 +589,7 @@ export default function PublicSharePage() {
                               className="w-full h-full object-cover"
                             />
                             <div className="absolute top-2 right-2 bg-black/60 text-white rounded-lg p-1 text-[8px] font-mono tracking-wider uppercase flex items-center gap-1">
-                              <Video className="w-2.5 h-2.5 text-emerald-400" />
+                              <Video className="w-2.5 h-2.5 text-emerald-400" style={customization?.primaryColor ? { color: customization.primaryColor } : undefined} />
                               <span>Video</span>
                             </div>
                           </div>
@@ -358,7 +607,12 @@ export default function PublicSharePage() {
                       )}
                       
                       {/* Zoom Overlay on Hover */}
-                      <div className="absolute inset-0 bg-zinc-950/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity duration-200">
+                      <div className="absolute inset-0 bg-zinc-950/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity duration-200"
+                           style={{
+                             ...getBorderRadiusClass(customization?.cardBorderRadius) === "rounded-xl" ? { borderRadius: "12px" } :
+                                getBorderRadiusClass(customization?.cardBorderRadius) === "rounded-2xl" ? { borderRadius: "16px" } :
+                                getBorderRadiusClass(customization?.cardBorderRadius) === "rounded-[28px]" ? { borderRadius: "20px" } : {}
+                           }}>
                         <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-white/90 dark:bg-zinc-900/90 shadow-sm text-[11px] font-medium text-zinc-800 dark:text-zinc-200 backdrop-blur-sm">
                           <Eye className="w-3.5 h-3.5" />
                           <span>Perbesar</span>
@@ -368,7 +622,8 @@ export default function PublicSharePage() {
                   </div>
                   
                   {/* Details & Action section */}
-                  <div className="p-3.5 flex items-center justify-between gap-2 bg-white dark:bg-zinc-950 border-t border-zinc-100 dark:border-zinc-900/60">
+                  <div className="p-3.5 flex items-center justify-between gap-2 bg-white dark:bg-zinc-950 border-t border-zinc-100 dark:border-zinc-900/60"
+                       style={customization?.primaryColor ? { borderColor: `${customization.primaryColor}20` } : { borderTopColor: "rgba(228, 228, 231, 0.6)" }}>
                     <div className="flex flex-col min-w-0 text-left">
                       <span className="text-xs font-semibold text-zinc-900 dark:text-zinc-100 truncate tracking-tight">
                         {asset.name}
@@ -382,7 +637,10 @@ export default function PublicSharePage() {
                     <button
                       onClick={() => handleDownloadSingle(asset)}
                       disabled={!asset.url || (asset.type === "video" && isVideoLoading)}
-                      className="p-2 rounded-xl text-zinc-700 bg-zinc-50 hover:bg-zinc-100 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800 ring-1 ring-inset ring-zinc-200/50 dark:ring-zinc-800 transition-all active:scale-95 font-semibold disabled:opacity-50 cursor-pointer shrink-0"
+                      className={`p-2 text-zinc-700 bg-zinc-50 hover:bg-zinc-100 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800 border transition-all active:scale-95 font-semibold disabled:opacity-50 cursor-pointer shrink-0 ${
+                        getBorderRadiusClass(customization?.cardBorderRadius)
+                      }`}
+                      style={customization?.primaryColor ? { borderColor: `${customization.primaryColor}20` } : { borderColor: "rgba(228, 228, 231, 0.6)" }}
                       title="Unduh Aset Ini"
                     >
                       <Download className="w-3.5 h-3.5" />

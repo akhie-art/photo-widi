@@ -17,6 +17,7 @@ import {
   History,
   Users,
   Calendar,
+  Paintbrush,
 } from "lucide-react";
 
 import {
@@ -35,7 +36,7 @@ import {
   SidebarFooter,
 } from "@/components/ui/sidebar";
 
-import SlideshowOverlay from "./components/SlideshowOverlay";
+import SlideshowOverlay from "./gallery/components/SlideshowOverlay";
 
 export default function AdminLayout({
   children,
@@ -247,6 +248,22 @@ export default function AdminLayout({
                       >
                         <Settings className="w-4 h-4 shrink-0" strokeWidth={1.5} />
                         <span className="group-data-[state=collapsed]:hidden">Pengaturan Booth</span>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+
+                    <SidebarMenuItem>
+                      <SidebarMenuButton
+                        render={<Link href="/admin/customization" />}
+                        isActive={activeTab === "customization"}
+                        tooltip="Kustomisasi UI/UX"
+                        className={`w-full justify-start group-data-[state=collapsed]:justify-center gap-3 group-data-[state=collapsed]:gap-0 px-3 group-data-[state=collapsed]:px-2 py-2 rounded-lg text-xs transition-all border ${
+                          activeTab === "customization"
+                            ? "bg-sidebar-accent border-sidebar-border text-foreground font-medium"
+                            : "bg-transparent border-transparent hover:bg-sidebar-accent/50 text-muted-foreground hover:text-foreground"
+                        }`}
+                      >
+                        <Paintbrush className="w-4 h-4 shrink-0" strokeWidth={1.5} />
+                        <span className="group-data-[state=collapsed]:hidden">Kustomisasi UI/UX</span>
                       </SidebarMenuButton>
                     </SidebarMenuItem>
 

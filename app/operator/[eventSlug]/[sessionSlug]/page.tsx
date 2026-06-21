@@ -3,29 +3,28 @@
 /* eslint-disable react-hooks/set-state-in-effect */
 
 import { useState, useEffect, useRef } from "react";
-import { usePhotoboothStore, PresetTemplate, PlacedSticker, StickerAsset } from "../../hooks/usePhotoboothStore";
+import { usePhotoboothStore, PresetTemplate, PlacedSticker, StickerAsset } from "../../../hooks/usePhotoboothStore";
 import { supabase } from "@/lib/supabase";
-import { renderPhotoStrip } from "../../utils/canvasRenderer";
-import { playBeep, playShutterSound } from "../../utils/audio";
+import { renderPhotoStrip } from "../../../utils/canvasRenderer";
+import { playBeep, playShutterSound } from "../../../utils/audio";
 import { useRouter, useParams } from "next/navigation";
 import { Sun, Moon, Sparkles, Heart, Star, Camera } from "lucide-react";
 import { toast } from "sonner";
 
-
-import CaptureScreen from "../components/CaptureScreen";
-import PaymentScreen from "../components/PaymentScreen";
-import SessionSetupScreen from "../components/SessionSetupScreen";
-import ShareScreen from "../components/ShareScreen";
+import CaptureScreen from "../../components/CaptureScreen";
+import PaymentScreen from "../../components/PaymentScreen";
+import ShareScreen from "../../components/ShareScreen";
+import TemplateDecoration from "../../components/TemplateDecoration";
 
 const FILTERS = [
-  { id: "original", name: "Original", css: "none" },
-  { id: "bw", name: "Retro B&W", css: "grayscale(1) contrast(1.3) brightness(1.05)" },
-  { id: "vintage", name: "Warm Film", css: "sepia(0.4) contrast(1.1) saturate(1.1) brightness(0.95)" },
-  { id: "neon", name: "Neon Glow", css: "hue-rotate(240deg) saturate(1.8) brightness(1.1)" },
-  { id: "sepia", name: "Sepia Dream", css: "sepia(0.8) hue-rotate(-20deg) saturate(1.3)" },
-  { id: "cyber", name: "Cyberpunk", css: "hue-rotate(295deg) saturate(1.7) contrast(1.15)" },
-  { id: "pop", name: "Pop Art", css: "saturate(2.3) contrast(1.25)" },
-  { id: "noir", name: "Classic Noir", css: "grayscale(1) contrast(1.9) brightness(0.9)" },
+  { id: "00000000-0000-0000-0000-000000000001", name: "Original", css: "none" },
+  { id: "00000000-0000-0000-0000-000000000002", name: "Retro B&W", css: "grayscale(1) contrast(1.3) brightness(1.05)" },
+  { id: "00000000-0000-0000-0000-000000000003", name: "Warm Film", css: "sepia(0.4) contrast(1.1) saturate(1.1) brightness(0.95)" },
+  { id: "00000000-0000-0000-0000-000000000004", name: "Neon Glow", css: "hue-rotate(240deg) saturate(1.8) brightness(1.1)" },
+  { id: "00000000-0000-0000-0000-000000000005", name: "Sepia Dream", css: "sepia(0.8) hue-rotate(-20deg) saturate(1.3)" },
+  { id: "00000000-0000-0000-0000-000000000006", name: "Cyberpunk", css: "hue-rotate(295deg) saturate(1.7) contrast(1.15)" },
+  { id: "00000000-0000-0000-0000-000000000007", name: "Pop Art", css: "saturate(2.3) contrast(1.25)" },
+  { id: "00000000-0000-0000-0000-000000000008", name: "Classic Noir", css: "grayscale(1) contrast(1.9) brightness(0.9)" },
 ];
 
 const LAYOUTS = [
@@ -41,13 +40,260 @@ const POSE_SUGGESTIONS = [
   "Pose 4: Berikan Pose Kreatif atau Unik",
 ];
 
+function getPresetLayout(preset: PresetTemplate | undefined): "strip" | "grid" | "polaroid" {
+  if (!preset) return "strip";
+  const name = (preset.name || "").toLowerCase();
+  if (name.includes("grid")) return "grid";
+  if (name.includes("polaroid")) return "polaroid";
+  if (preset.customSlots) {
+    if (preset.customSlots.length === 1) return "polaroid";
+    const firstXPct = preset.customSlots[0]?.xPct ?? 0;
+    const isGrid = preset.customSlots.some(s => Math.abs((s.xPct ?? 0) - firstXPct) > 5);
+    if (isGrid) return "grid";
+  }
+  return "strip";
+}
+
+const THEME_GLOWS = {
+  sunset: {
+    topLeft: "bg-amber-400/8 dark:bg-amber-500/5",
+    bottomRight: "bg-pink-400/8 dark:bg-pink-500/5",
+    topRight: "bg-cyan-400/6 dark:bg-cyan-500/3",
+    bottomLeft: "bg-purple-400/6 dark:bg-purple-500/3",
+  },
+  neon: {
+    topLeft: "bg-fuchsia-400/8 dark:bg-fuchsia-500/5",
+    bottomRight: "bg-cyan-400/8 dark:bg-cyan-500/5",
+    topRight: "bg-violet-400/6 dark:bg-violet-500/3",
+    bottomLeft: "bg-rose-400/6 dark:bg-rose-500/3",
+  },
+  luxury: {
+    topLeft: "bg-yellow-500/8 dark:bg-yellow-600/5",
+    bottomRight: "bg-amber-500/8 dark:bg-amber-600/5",
+    topRight: "bg-zinc-400/6 dark:bg-zinc-500/3",
+    bottomLeft: "bg-orange-400/6 dark:bg-orange-500/3",
+  },
+  romantic: {
+    topLeft: "bg-rose-400/8 dark:bg-rose-500/5",
+    bottomRight: "bg-pink-400/8 dark:bg-pink-500/5",
+    topRight: "bg-red-400/6 dark:bg-red-500/3",
+    bottomLeft: "bg-rose-300/6 dark:bg-rose-400/3",
+  },
+  emerald: {
+    topLeft: "bg-emerald-400/8 dark:bg-emerald-500/5",
+    bottomRight: "bg-teal-400/8 dark:bg-teal-500/5",
+    topRight: "bg-cyan-400/6 dark:bg-cyan-500/3",
+    bottomLeft: "bg-green-400/6 dark:bg-green-500/3",
+  },
+};
+
 export default function CustomerBoothSession() {
-  const { config, addPhoto } = usePhotoboothStore();
+  const { config, addPhoto, updateConfig, isLoading } = usePhotoboothStore();
   const router = useRouter();
   const params = useParams();
-  const slug = Array.isArray(params?.slug) ? params.slug[0] : params?.slug;
+  const eventSlug = Array.isArray(params?.eventSlug) ? params.eventSlug[0] : params?.eventSlug;
+  const sessionSlug = Array.isArray(params?.sessionSlug) ? params.sessionSlug[0] : params?.sessionSlug;
 
-  const [step, setStep] = useState<"start" | "payment" | "setup" | "capture" | "share">("payment");
+  // Dynamic Font Loader
+  useEffect(() => {
+    if (typeof window === "undefined" || !config?.fontStyle) return;
+    const fontId = "dynamic-operator-font";
+    let linkElement = document.getElementById(fontId) as HTMLLinkElement;
+    if (!linkElement) {
+      linkElement = document.createElement("link");
+      linkElement.id = fontId;
+      linkElement.rel = "stylesheet";
+      document.head.appendChild(linkElement);
+    }
+    
+    const getFontUrl = (f: string) => {
+      switch (f) {
+        case "outfit": return "https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap";
+        case "syne": return "https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&display=swap";
+        case "playfair": return "https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400&display=swap";
+        case "cabinet": return "https://api.fontshare.com/v2/css?f[]=cabinet-grotesk@800,700,400,300&display=swap";
+        case "inter":
+        default:
+          return "https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap";
+      }
+    };
+    linkElement.href = getFontUrl(config.fontStyle);
+  }, [config?.fontStyle]);
+
+  const getFontFamilyName = (f: string) => {
+    switch (f) {
+      case "outfit": return "'Outfit', sans-serif";
+      case "syne": return "'Syne', sans-serif";
+      case "playfair": return "'Playfair Display', serif";
+      case "cabinet": return "'Cabinet Grotesk', sans-serif";
+      case "inter":
+      default:
+        return "'Inter', sans-serif";
+    }
+  };
+
+  const [customization, setCustomization] = useState<any>(null);
+
+  // Load event-specific configuration if eventSlug is present
+  useEffect(() => {
+    if (isLoading || !eventSlug) return;
+    
+    let active = true;
+
+    const loadEventConfig = async () => {
+      try {
+        const { data: event, error } = await supabase
+          .from("events")
+          .select("*")
+          .eq("slug", eventSlug)
+          .single();
+
+        if (error || !event) {
+          console.warn("No active event found for slug:", eventSlug);
+          return;
+        }
+
+        // Cache the verified event slug
+        if (typeof window !== "undefined") {
+          sessionStorage.setItem("glow_active_event_slug", eventSlug);
+        }
+
+        if (active) {
+          let uiTheme = event.bg_theme || "sunset";
+          let uiFont = "inter";
+          let welcomeText = "";
+          let footerText = "";
+          let logoUrl = event.logo_url || "";
+          let qrisUrl = event.qris_url || "";
+          let showPayment = event.show_payment !== false;
+          let showSetup = event.show_setup !== false;
+          let mirrorDefault = true;
+          let countdownDuration = 3;
+          let allowedLayouts = ["strip"];
+
+          if (event.ui_template_id) {
+            try {
+              const [tempRes, compsRes] = await Promise.all([
+                supabase.from("ui_templates").select("*").eq("id", event.ui_template_id).single(),
+                supabase.from("ui_components").select("*").eq("ui_template_id", event.ui_template_id)
+              ]);
+              const template = tempRes.data;
+              const tempError = tempRes.error;
+              const comps = compsRes.data;
+
+              if (!tempError && template) {
+                uiTheme = template.bg_theme || "sunset";
+                uiFont = template.font_style || "inter";
+                welcomeText = template.welcome_text || "";
+                footerText = template.footer_text || "";
+                if (template.logo_url) logoUrl = template.logo_url;
+                if (template.qris_url) qrisUrl = template.qris_url;
+                showPayment = template.show_payment !== false;
+                showSetup = template.show_setup !== false;
+                mirrorDefault = template.mirror_default !== false;
+                countdownDuration = template.countdown_duration ?? 3;
+                allowedLayouts = template.allowed_layouts || ["strip"];
+
+                const customizationData: any = {};
+                if (comps) {
+                  comps.forEach(c => {
+                    Object.assign(customizationData, c.properties);
+                  });
+                }
+
+                if (Object.keys(customizationData).length > 0) {
+                  setCustomization(customizationData);
+                  try {
+                    localStorage.setItem(`glowbooth_customization_${template.id}`, JSON.stringify(customizationData));
+                  } catch (e) {
+                    console.error("Failed to sync localStorage:", e);
+                  }
+                } else {
+                  const stored = localStorage.getItem(`glowbooth_customization_${template.id}`);
+                  if (stored) {
+                    setCustomization(JSON.parse(stored));
+                  } else {
+                    setCustomization(null);
+                  }
+                }
+              }
+            } catch (err) {
+              console.error("Gagal memuat template UI:", err);
+            }
+          } else {
+            setCustomization(null);
+          }
+
+          await updateConfig({
+            eventName: event.name,
+            date: event.date || "",
+            location: event.location || "",
+            pricePerSession: event.price_per_session ?? 25000,
+            logoUrl,
+            qrisUrl,
+            allowedPresets: event.allowed_presets || [],
+            allowedFilters: event.allowed_filters || [],
+            allowedStickers: event.allowed_stickers || [],
+            bgTheme: uiTheme,
+            fontStyle: uiFont,
+            welcomeText,
+            footerText,
+            showPayment,
+            showSetup,
+            mirrorDefault,
+            countdownDuration,
+            allowedLayouts,
+          }, false);
+        }
+      } catch (err) {
+        console.error("Error fetching event settings:", err);
+      }
+    };
+    
+    loadEventConfig();
+
+    return () => {
+      active = false;
+    };
+  }, [eventSlug, updateConfig, isLoading]);
+
+  // Subscribe to real-time changes of this specific event
+  useEffect(() => {
+    if (!eventSlug) return;
+    
+    const channel = supabase
+      .channel(`operator-session-event-sync-${eventSlug}`)
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "events", filter: `slug=eq.${eventSlug}` },
+        (payload) => {
+          const updatedEvent = payload.new;
+          if (updatedEvent) {
+            updateConfig({
+              eventName: updatedEvent.name,
+              date: updatedEvent.date || "",
+              location: updatedEvent.location || "",
+              pricePerSession: updatedEvent.price_per_session ?? 25000,
+              logoUrl: updatedEvent.logo_url || "",
+              qrisUrl: updatedEvent.qris_url || "",
+              allowedPresets: updatedEvent.allowed_presets || [],
+              allowedFilters: updatedEvent.allowed_filters || [],
+              allowedStickers: updatedEvent.allowed_stickers || [],
+              bgTheme: updatedEvent.bg_theme || "sunset",
+              showPayment: updatedEvent.show_payment !== false,
+              showSetup: updatedEvent.show_setup !== false,
+            }, false);
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [eventSlug, updateConfig]);
+
+  const [step, setStep] = useState<"start" | "payment" | "capture" | "share">("payment");
   const [theme, setTheme] = useState<"dark" | "light">("dark");
   const [authorized, setAuthorized] = useState(false);
 
@@ -81,7 +327,7 @@ export default function CustomerBoothSession() {
   const [customText, setCustomText] = useState("");
   const [lastSavedPhotoId, setLastSavedPhotoId] = useState<string | null>(null);
 
-  // Sticker state (lifted from CaptureScreen so canvasRenderer can use it)
+  // Sticker state
   const [placedStickers, setPlacedStickers] = useState<PlacedSticker[]>([]);
 
   const handleAddSticker = (sticker: StickerAsset) => {
@@ -92,19 +338,21 @@ export default function CustomerBoothSession() {
       ...prev,
       { id, stickerId: sticker.id, xPct, yPct, scalePct: 20, rotation: Math.round((Math.random() - 0.5) * 30) },
     ]);
-    toast(`Stiker "${sticker.name}" ditambahkan`, { duration: 1200, icon: "✨" });
+    toast("Stiker ditambahkan", { duration: 1200, icon: "✨" });
   };
 
   const handleRemoveSticker = (id: string) => {
     setPlacedStickers((prev) => prev.filter((ps) => ps.id !== id));
   };
-const handleUpdateSticker = (id: string, updates: Partial<PlacedSticker>) => {
+
+  const handleUpdateSticker = (id: string, updates: Partial<PlacedSticker>) => {
     setPlacedStickers((prev) =>
       prev.map((sticker) =>
         sticker.id === id ? { ...sticker, ...updates } : sticker
       )
     );
   };
+
   // Customer registration state
   const [customerName, setCustomerNameState] = useState("");
   const [customerPhone, setCustomerPhoneState] = useState("");
@@ -205,13 +453,13 @@ const handleUpdateSticker = (id: string, updates: Partial<PlacedSticker>) => {
     });
   };
 
-  const changeStep = (newStep: "start" | "payment" | "setup" | "capture" | "share") => {
+  const changeStep = (newStep: "start" | "payment" | "capture" | "share") => {
     if (newStep === "start") {
-      router.push("/operator");
+      router.push(`/operator/${eventSlug}?step=registrasi`);
       return;
     }
     setStep(newStep);
-    if (typeof window !== "undefined" && slug) {
+    if (typeof window !== "undefined" && eventSlug && sessionSlug) {
       const url = new URL(window.location.href);
       url.searchParams.set("step", newStep);
       window.history.pushState({}, "", url.toString());
@@ -223,7 +471,7 @@ const handleUpdateSticker = (id: string, updates: Partial<PlacedSticker>) => {
     setCustomerPhoneState("");
     setSessionsCountState(1);
     setCapturedPhotosState([]);
-    setPlacedStickers([]); // reset stiker saat sesi baru
+    setPlacedStickers([]);
     if (typeof window !== "undefined") {
       sessionStorage.removeItem("glow_customer_name");
       sessionStorage.removeItem("glow_customer_phone");
@@ -266,26 +514,20 @@ const handleUpdateSticker = (id: string, updates: Partial<PlacedSticker>) => {
     if (config && activeFrameId) {
       const preset = config.presetTemplates?.find((p) => p.id === activeFrameId);
       if (preset) {
-        if (preset.id.includes("grid")) {
-          setActiveLayout("grid");
-        } else if (preset.id.includes("polaroid") || preset.customSlots) {
-          setActiveLayout("polaroid");
-        } else {
-          setActiveLayout("strip");
-        }
+        setActiveLayout(getPresetLayout(preset));
       }
     }
   }, [config, activeFrameId]);
 
   // Sync step state with URL parameter on mount & handle browser back/forward buttons
   useEffect(() => {
-    if (typeof window === "undefined") return;
+    if (typeof window === "undefined" || isLoading) return;
 
     const syncStepFromUrl = () => {
       const params = new URLSearchParams(window.location.search);
-      const urlStep = params.get("step") as "start" | "payment" | "setup" | "capture" | "share" | null;
+      const urlStep = params.get("step") as "start" | "payment" | "capture" | "share" | null;
       
-      if (slug) {
+      if (eventSlug && sessionSlug) {
         const name = sessionStorage.getItem("glow_customer_name") || "";
         const phone = sessionStorage.getItem("glow_customer_phone") || "";
         const photosStr = sessionStorage.getItem("glow_captured_photos") || "[]";
@@ -293,18 +535,32 @@ const handleUpdateSticker = (id: string, updates: Partial<PlacedSticker>) => {
         try { photos = JSON.parse(photosStr); } catch {}
 
         if (!name || !phone) {
-          router.replace("/operator");
-        } else if (urlStep === "share" && photos.length === 0) {
-          changeStep("capture");
-        } else if (urlStep === "start") {
-          router.replace("/operator");
-        } else if (urlStep && ["payment", "capture", "share"].includes(urlStep)) {
-          setStep(urlStep);
+          router.replace(`/operator/${eventSlug}?step=registrasi`);
+          return;
+        } 
+        
+        let resolvedStep: string = urlStep || "payment";
+        
+        if (resolvedStep === "payment" && config.showPayment === false) {
+          resolvedStep = "capture";
+        }
+        if (resolvedStep === "setup") {
+          resolvedStep = "capture";
+        }
+        
+        if (resolvedStep === "share" && photos.length === 0) {
+          resolvedStep = "capture";
+        }
+
+        const allowedSteps = ["payment", "capture", "share"];
+        if (allowedSteps.includes(resolvedStep)) {
+          setStep(resolvedStep as any);
         } else {
-          changeStep("payment");
+          const defaultStep = config.showPayment !== false ? "payment" : "capture";
+          changeStep(defaultStep);
         }
       } else {
-        router.replace("/operator");
+        router.replace("/operator?step=event-terjadwal");
       }
     };
 
@@ -312,12 +568,12 @@ const handleUpdateSticker = (id: string, updates: Partial<PlacedSticker>) => {
 
     window.addEventListener("popstate", syncStepFromUrl);
     return () => window.removeEventListener("popstate", syncStepFromUrl);
-  }, [slug]);
+  }, [eventSlug, sessionSlug, isLoading, config.showPayment, config.showSetup]);
 
   // Filter lists based on admin global rules & custom filters
   const activeFiltersList = (config.customFilters || [])
     .filter((f) => {
-      if (!config.allowedFilters || config.allowedFilters.length === 0 || (config.allowedFilters.length === 1 && config.allowedFilters[0] === "original")) {
+      if (!config.allowedFilters || config.allowedFilters.length === 0 || (config.allowedFilters.length === 1 && config.allowedFilters[0] === "00000000-0000-0000-0000-000000000001")) {
         return true;
       }
       return config.allowedFilters.includes(f.id);
@@ -345,17 +601,14 @@ const handleUpdateSticker = (id: string, updates: Partial<PlacedSticker>) => {
   // Sync customizable frame elements
   useEffect(() => {
     if (config) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       setIsMirrored(config.mirrorDefault ?? true);
       
       // Auto-initialize activeFrameId
       const initialPresetId = config.activePresetTemplateId || (config.presetTemplates && config.presetTemplates[0]?.id) || "";
       if (initialPresetId && !activeFrameId) {
-        // eslint-disable-next-line react-hooks/set-state-in-effect
         setActiveFrameId(initialPresetId);
         const activeTemplate = config.presetTemplates?.find((p) => p.id === initialPresetId);
         if (activeTemplate) {
-          // eslint-disable-next-line react-hooks/set-state-in-effect
           setCustomText(config.frameText || activeTemplate.name || "");
         }
       }
@@ -363,29 +616,24 @@ const handleUpdateSticker = (id: string, updates: Partial<PlacedSticker>) => {
       // Auto fallback active options if current options are disabled by admin
       const hasLayoutRestrictions = config.allowedLayouts && config.allowedLayouts.length > 0 && !(config.allowedLayouts.length === 1 && config.allowedLayouts[0] === "strip");
       if (hasLayoutRestrictions && !config.allowedLayouts.includes(activeLayout)) {
-        // eslint-disable-next-line react-hooks/set-state-in-effect
         setActiveLayout(config.allowedLayouts[0] as "strip" | "grid" | "polaroid");
       }
-      const hasFilterRestrictions = config.allowedFilters && config.allowedFilters.length > 0 && !(config.allowedFilters.length === 1 && config.allowedFilters[0] === "original");
+      const hasFilterRestrictions = config.allowedFilters && config.allowedFilters.length > 0 && !(config.allowedFilters.length === 1 && config.allowedFilters[0] === "00000000-0000-0000-0000-000000000001");
       if (hasFilterRestrictions && !config.allowedFilters.includes(activeFilter.id)) {
         const fallbackFilter = config.customFilters?.find((f) => f.id === config.allowedFilters[0]) || FILTERS.find((f) => f.id === config.allowedFilters[0]) || FILTERS[0];
-        // eslint-disable-next-line react-hooks/set-state-in-effect
         setActiveFilter(fallbackFilter);
       }
       const allowedPresets = config.allowedPresets;
       const hasPresetRestrictions = allowedPresets && allowedPresets.length > 0;
       if (hasPresetRestrictions && !allowedPresets.includes(activeFrameId)) {
         const fallbackPresetId = allowedPresets[0];
-        // eslint-disable-next-line react-hooks/set-state-in-effect
         setActiveFrameId(fallbackPresetId);
         const fallbackTemplate = config.presetTemplates?.find((p) => p.id === fallbackPresetId);
         if (fallbackTemplate) {
-          // eslint-disable-next-line react-hooks/set-state-in-effect
           setCustomText(config.frameText || fallbackTemplate.name || "");
         }
       }
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [config, activeLayout, activeFilter, activeFrameId]);
 
   // Sync initial countdownDuration once from config when loaded
@@ -399,11 +647,9 @@ const handleUpdateSticker = (id: string, updates: Partial<PlacedSticker>) => {
   // Synchronize activeFrameId with the admin's selection on the Start Screen
   useEffect(() => {
     if (step === "start" && config.activePresetTemplateId) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       setActiveFrameId(config.activePresetTemplateId);
       const activeTemplate = config.presetTemplates?.find((p) => p.id === config.activePresetTemplateId);
       if (activeTemplate) {
-        // eslint-disable-next-line react-hooks/set-state-in-effect
         setCustomText(config.frameText || activeTemplate.name || "");
       }
     }
@@ -436,7 +682,6 @@ const handleUpdateSticker = (id: string, updates: Partial<PlacedSticker>) => {
       toast.error(
         "Kamera tidak dapat diakses karena koneksi tidak aman (non-HTTPS). Gunakan koneksi HTTPS atau akses melalui localhost."
       );
-      console.warn("webcam access blocked: navigator.mediaDevices is undefined (requires a Secure Context / HTTPS)");
       return;
     }
 
@@ -461,7 +706,6 @@ const handleUpdateSticker = (id: string, updates: Partial<PlacedSticker>) => {
         });
       }
 
-      // Re-enumerate cameras after permission granted to retrieve labels & accurate device IDs
       if (typeof navigator !== "undefined" && navigator.mediaDevices) {
         const devices = await navigator.mediaDevices.enumerateDevices();
         const videoDevices = devices.filter((device) => device.kind === "videoinput");
@@ -481,7 +725,7 @@ const handleUpdateSticker = (id: string, updates: Partial<PlacedSticker>) => {
     } catch (err) {
       console.error("Webcam open failed:", err);
       toast.error("Gagal mengakses kamera. Mohon izinkan akses kamera di browser Anda.");
-      router.push("/operator");
+      router.push(`/operator/${eventSlug}?step=registrasi`);
     }
   };
 
@@ -498,7 +742,6 @@ const handleUpdateSticker = (id: string, updates: Partial<PlacedSticker>) => {
   // Handle webcam streaming when starting/stopping capture session
   useEffect(() => {
     if (step === "capture") {
-      // Avoid restarting the camera if the stream is already active for the selected camera
       const activeTrack = streamRef.current?.getVideoTracks()[0];
       const activeDeviceId = activeTrack?.getSettings()?.deviceId;
       
@@ -517,7 +760,6 @@ const handleUpdateSticker = (id: string, updates: Partial<PlacedSticker>) => {
         stopCamera();
       }
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step, selectedCameraId]);
 
   const startCaptureSequence = async () => {
@@ -528,7 +770,6 @@ const handleUpdateSticker = (id: string, updates: Partial<PlacedSticker>) => {
       ? selectedFrameTemplate.customSlots.length
       : layoutObj.count;
     
-    // Find first empty slot (where photo is empty/falsy)
     let activeSlotIndex = -1;
     for (let i = 0; i < totalPhotos; i++) {
       if (!capturedPhotos[i]) {
@@ -538,7 +779,6 @@ const handleUpdateSticker = (id: string, updates: Partial<PlacedSticker>) => {
     }
 
     if (activeSlotIndex === -1) {
-      // Clear all and restart from slot 1
       setCapturedPhotos([]);
       captureSingleSlot(0, false);
       return;
@@ -665,11 +905,24 @@ const handleUpdateSticker = (id: string, updates: Partial<PlacedSticker>) => {
   const handlePrint = async () => {
     if (!compiledStripUrl) return;
     setIsRendering(true);
+    
+    const paperSize = selectedFrameTemplate?.paperSize || (activeLayout === "strip" ? "2R" : "4R");
+    const pageSizeCss = paperSize === "2R" ? "2in 6in" : "4in 6in";
+      
+    // Browser native window.print() dialog (using hidden iframe to avoid new tab/window preview)
     try {
-      // Open print window
-      const printWindow = window.open("", "_blank");
-      if (printWindow) {
-        printWindow.document.write(`
+      const iframe = document.createElement("iframe");
+      iframe.style.position = "fixed";
+      iframe.style.right = "0";
+      iframe.style.bottom = "0";
+      iframe.style.width = "0";
+      iframe.style.height = "0";
+      iframe.style.border = "0";
+      document.body.appendChild(iframe);
+
+      const iframeDoc = iframe.contentDocument || iframe.contentWindow?.document;
+      if (iframeDoc) {
+        iframeDoc.write(`
           <html>
             <head>
               <title>Print Photo Strip</title>
@@ -689,7 +942,7 @@ const handleUpdateSticker = (id: string, updates: Partial<PlacedSticker>) => {
                 }
                 @page {
                   margin: 0;
-                  size: auto;
+                  size: ${pageSizeCss};
                 }
                 @media print {
                   body {
@@ -703,20 +956,118 @@ const handleUpdateSticker = (id: string, updates: Partial<PlacedSticker>) => {
               </style>
             </head>
             <body>
-              <img src="${compiledStripUrl}" onload="window.print(); window.close();" />
+              <img id="print-image" src="${compiledStripUrl}" />
+              <script>
+                const img = document.getElementById('print-image');
+                if (img.complete) {
+                  window.focus();
+                  window.print();
+                } else {
+                  img.onload = function() {
+                    window.focus();
+                    window.print();
+                  };
+                }
+              </script>
             </body>
           </html>
         `);
-        printWindow.document.close();
+        iframeDoc.close();
+
+        iframe.contentWindow?.addEventListener("afterprint", () => {
+          document.body.removeChild(iframe);
+        });
         toast.success("Membuka dialog pencetakan...");
       } else {
-        toast.error("Gagal membuka jendela pencetakan. Harap izinkan pop-up.");
+        toast.error("Gagal menyiapkan media cetak bawaan browser.");
       }
     } catch (e) {
       console.error("Print error:", e);
       toast.error("Gagal mencetak foto.");
     } finally {
       setIsRendering(false);
+    }
+  };
+
+  const handlePrintManual = () => {
+    if (!compiledStripUrl) return;
+    try {
+      const paperSize = selectedFrameTemplate?.paperSize || (activeLayout === "strip" ? "2R" : "4R");
+      const pageSizeCss = paperSize === "2R" ? "2in 6in" : "4in 6in";
+
+      const iframe = document.createElement("iframe");
+      iframe.style.position = "fixed";
+      iframe.style.right = "0";
+      iframe.style.bottom = "0";
+      iframe.style.width = "0";
+      iframe.style.height = "0";
+      iframe.style.border = "0";
+      document.body.appendChild(iframe);
+
+      const iframeDoc = iframe.contentDocument || iframe.contentWindow?.document;
+      if (iframeDoc) {
+        iframeDoc.write(`
+          <html>
+            <head>
+              <title>Print Photo Strip</title>
+              <style>
+                body {
+                  margin: 0;
+                  display: flex;
+                  justify-content: center;
+                  align-items: center;
+                  background-color: white;
+                  height: 100vh;
+                }
+                img {
+                  max-width: 100%;
+                  max-height: 100vh;
+                  object-fit: contain;
+                }
+                @page {
+                  margin: 0;
+                  size: ${pageSizeCss};
+                }
+                @media print {
+                  body {
+                    background-color: white;
+                  }
+                  img {
+                    max-width: 100%;
+                    max-height: 100vh;
+                  }
+                }
+              </style>
+            </head>
+            <body>
+              <img id="print-image" src="${compiledStripUrl}" />
+              <script>
+                const img = document.getElementById('print-image');
+                if (img.complete) {
+                  window.focus();
+                  window.print();
+                } else {
+                  img.onload = function() {
+                    window.focus();
+                    window.print();
+                  };
+                }
+              </script>
+            </body>
+          </html>
+        `);
+        iframeDoc.close();
+
+        iframe.contentWindow?.addEventListener("afterprint", () => {
+          document.body.removeChild(iframe);
+        });
+        toast.success("Membuka dialog pencetakan manual...");
+      } else {
+        toast.error("Gagal menyiapkan media cetak bawaan browser.");
+      }
+    } catch (e) {
+      console.error("Manual Print error:", e);
+      toast.error("Gagal membuka dialog printer.");
     }
   };
 
@@ -731,7 +1082,7 @@ const handleUpdateSticker = (id: string, updates: Partial<PlacedSticker>) => {
         changeStep("capture");
       } else {
         clearSessionData();
-        router.push("/operator");
+        router.push(`/operator/${eventSlug}?step=registrasi`);
       }
     } catch (e) {
       console.error("Advance session error:", e);
@@ -743,7 +1094,6 @@ const handleUpdateSticker = (id: string, updates: Partial<PlacedSticker>) => {
 
   const handleFrameSelect = (preset: PresetTemplate) => {
     if (activeFrameId === preset.id) {
-      // Batal pilih template preset
       setActiveFrameId("");
       setCustomText("");
       setActiveLayout("strip");
@@ -756,20 +1106,13 @@ const handleUpdateSticker = (id: string, updates: Partial<PlacedSticker>) => {
       if (typeof window !== "undefined") {
         sessionStorage.setItem("glow_selected_preset_id", preset.id);
       }
-      // Auto-set activeLayout based on preset ID or customSlots count
-      if (preset.id.includes("grid")) {
-        setActiveLayout("grid");
-      } else if (preset.id.includes("polaroid") || preset.customSlots) {
-        setActiveLayout("polaroid");
-      } else {
-        setActiveLayout("strip");
-      }
+      setActiveLayout(getPresetLayout(preset));
     }
   };
 
   const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-  if (!authorized) {
+  if (!authorized || isLoading) {
     return (
       <div className="min-h-screen bg-[#121214] flex flex-col items-center justify-center gap-4 text-zinc-400 font-mono text-xs">
         <div className="w-8 h-8 rounded-full border-2 border-zinc-700 border-t-zinc-300 animate-spin" />
@@ -780,105 +1123,44 @@ const handleUpdateSticker = (id: string, updates: Partial<PlacedSticker>) => {
 
   const isScrollLocked = ["payment", "capture", "share"].includes(step);
 
+  const bgTheme = (config?.bgTheme as keyof typeof THEME_GLOWS) || "sunset";
+  const themeGlow = THEME_GLOWS[bgTheme] || THEME_GLOWS.sunset;
+
+  const getPageBgClass = (style?: string) => {
+    switch (style) {
+      case "neobrutalist":
+        return "bg-[#FFF9F2] dark:bg-[#0f172a] text-black dark:text-white";
+      case "frameless":
+        return "bg-[#FAF6F0] dark:bg-[#181112] text-zinc-850 dark:text-[#e3e3e3]";
+      case "glass":
+        return "bg-gradient-to-br from-[#0a0d1a] via-[#05060b] to-[#020305] text-zinc-100 dark:text-zinc-100";
+      case "classic":
+      default:
+        return "bg-[#FBFBFA] dark:bg-[#0B0B0C] text-zinc-850 dark:text-[#E3E3E3]";
+    }
+  };
+
   return (
-    <div className={`flex-1 bg-[#fbfbfb] dark:bg-[#0b0b0c] text-zinc-800 dark:text-[#e3e3e3] font-sans flex flex-col justify-between relative transition-colors duration-300 ${
+    <div className={`flex-1 ${getPageBgClass(customization?.cardStyle)} flex flex-col justify-between relative transition-colors duration-300 ${
       isScrollLocked ? "h-screen overflow-hidden" : "min-h-screen overflow-x-hidden"
-    }`}>
-      {/* Visual Ambient Background Glows - Happy & Cheerful Colors */}
-      <div className="absolute top-[-10%] left-[-10%] w-[50%] aspect-square rounded-full bg-amber-400/8 dark:bg-amber-500/5 blur-[120px] pointer-events-none z-0 animate-pulse" style={{ animationDuration: '8s' }} />
-      <div className="absolute bottom-[-10%] right-[-10%] w-[50%] aspect-square rounded-full bg-pink-400/8 dark:bg-pink-500/5 blur-[120px] pointer-events-none z-0 animate-pulse" style={{ animationDuration: '10s' }} />
-      <div className="absolute top-[20%] right-[-15%] w-[45%] aspect-square rounded-full bg-cyan-400/6 dark:bg-cyan-500/3 blur-[120px] pointer-events-none z-0" />
-      <div className="absolute bottom-[20%] left-[-15%] w-[45%] aspect-square rounded-full bg-purple-400/6 dark:bg-purple-500/3 blur-[120px] pointer-events-none z-0" />
-
-      {/* Floating Photobooth/Polaroid Illustrations & Playful Sparkles */}
-      <div className="absolute left-[5%] top-[20%] w-24 h-56 rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200/50 dark:border-zinc-800/50 shadow-xl rotate-[-12deg] p-2 flex flex-col gap-1.5 pointer-events-none select-none opacity-20 dark:opacity-10 hidden xl:flex z-0">
-        <div className="bg-zinc-50 dark:bg-zinc-950 aspect-[4/3] rounded-md flex items-center justify-center">
-          <Star className="w-4 h-4 text-amber-400 fill-amber-300 dark:fill-transparent" />
-        </div>
-        <div className="bg-zinc-50 dark:bg-zinc-950 aspect-[4/3] rounded-md flex items-center justify-center">
-          <Camera className="w-4 h-4 text-blue-400" />
-        </div>
-        <div className="bg-zinc-50 dark:bg-zinc-950 aspect-[4/3] rounded-md flex items-center justify-center">
-          <Heart className="w-4 h-4 text-pink-400 fill-pink-300 dark:fill-transparent" />
-        </div>
-        <div className="mt-auto text-center text-[6px] font-mono tracking-widest text-zinc-450 dark:text-zinc-500 uppercase font-bold">MEMORIES</div>
-      </div>
-
-      <div className="absolute right-[5%] top-[25%] w-28 h-32 rounded-lg bg-white dark:bg-zinc-900 border border-zinc-200/50 dark:border-zinc-800/50 shadow-xl rotate-[15deg] p-2 flex flex-col pointer-events-none select-none opacity-20 dark:opacity-10 hidden xl:flex z-0">
-        <div className="bg-zinc-50 dark:bg-zinc-950 w-full aspect-square rounded-md flex items-center justify-center">
-          <Sparkles className="w-5 h-5 text-purple-400" />
-        </div>
-        <div className="mt-auto text-center text-[8px] font-serif italic text-zinc-400 dark:text-zinc-500">smile!</div>
-      </div>
-
-      {/* Playful Floating Confetti & Sparkles */}
-      <div className="absolute left-[15%] top-[12%] pointer-events-none select-none opacity-25 dark:opacity-10 animate-bounce z-0" style={{ animationDuration: '4s' }}>
-        <Sparkles className="w-6 h-6 text-yellow-400 fill-yellow-100 dark:fill-transparent" />
-      </div>
-      <div className="absolute left-[4%] top-[55%] pointer-events-none select-none opacity-15 dark:opacity-5 animate-pulse z-0" style={{ animationDuration: '3s' }}>
-        <Heart className="w-8 h-8 text-pink-400 fill-pink-400" />
-      </div>
-      <div className="absolute left-[18%] top-[75%] pointer-events-none select-none opacity-20 dark:opacity-10 z-0">
-        <Camera className="w-7 h-7 text-blue-400" />
-      </div>
-
-      <div className="absolute right-[16%] top-[15%] pointer-events-none select-none opacity-25 dark:opacity-10 animate-pulse z-0" style={{ animationDuration: '5s' }}>
-        <Sparkles className="w-5 h-5 text-pink-400 fill-pink-100 dark:fill-transparent" />
-      </div>
-      <div className="absolute right-[4%] top-[60%] pointer-events-none select-none opacity-20 dark:opacity-8 animate-bounce z-0" style={{ animationDuration: '3.5s' }}>
-        <Star className="w-8 h-8 text-yellow-400 fill-yellow-400" />
-      </div>
-      <div className="absolute right-[18%] top-[78%] pointer-events-none select-none opacity-15 dark:opacity-8 z-0">
-        <Sparkles className="w-6 h-6 text-purple-400 fill-purple-100 dark:fill-transparent" />
-      </div>
+    }`} style={{ fontFamily: getFontFamilyName(config?.fontStyle || 'inter') }}>
+      
+      {/* Dynamic Template-specific visual decorations */}
+      <TemplateDecoration 
+        cardStyle={customization?.cardStyle} 
+        customization={customization} 
+        hideSidePanels={step === "capture" || step === "share" || step === "payment"}
+      />
 
       {/* Visual Flash Effect Overlay */}
       {flashActive && (
         <div className="fixed inset-0 bg-white z-[9999] animate-pulse duration-75 pointer-events-none" />
       )}
 
-      {/* Setup: full-page, no centering or padding */}
-      {slug && step === "setup" && (
-        <SessionSetupScreen
-          config={config}
-          sessionNum={currentSessionNum}
-          totalSessions={sessionsCount}
-          customerName={customerName}
-          customerPhone={customerPhone}
-          eventName={config.eventName}
-          theme={theme}
-          toggleTheme={toggleTheme}
-          selectedPresetId={config.presetTemplates?.some(p => p.id === activeFrameId) ? activeFrameId : ""}
-          selectedFilterId={activeFilter.id}
-          onSelectPreset={(preset) => {
-            if (activeFrameId === preset.id) {
-              if (typeof window !== "undefined") {
-                sessionStorage.setItem("glow_selected_preset_id", "none");
-              }
-              setActiveFrameId("");
-              setCustomText("");
-              setActiveLayout("strip");
-            } else {
-              if (typeof window !== "undefined") {
-                sessionStorage.setItem("glow_selected_preset_id", preset.id);
-              }
-              handleFrameSelect(preset);
-            }
-          }}
-          onSelectFilter={(filter) => {
-            if (activeFilter.id === filter.id) {
-              const originalFilter = config.customFilters?.find(f => f.id === "original") || FILTERS.find(f => f.id === "original") || FILTERS[0];
-              setActiveFilter(originalFilter);
-            } else {
-              setActiveFilter(filter);
-            }
-          }}
-          availableFilters={activeFiltersList}
-          onContinue={() => changeStep("capture")}
-        />
-      )}
 
-      {slug && step === "share" && (
+
+      {/* Share screen */}
+      {eventSlug && sessionSlug && step === "share" && (
         <ShareScreen
           config={config}
           compiledStripUrl={compiledStripUrl}
@@ -890,10 +1172,13 @@ const handleUpdateSticker = (id: string, updates: Partial<PlacedSticker>) => {
           photoId={lastSavedPhotoId}
           onComplete={handleShareComplete}
           handlePrint={handlePrint}
+          handlePrintManual={handlePrintManual}
+          customization={customization}
         />
       )}
 
-      {slug && step === "capture" && (
+      {/* Capture screen */}
+      {eventSlug && sessionSlug && step === "capture" && (
         <CaptureScreen
           videoRef={videoRef}
           isCapturing={isCapturing}
@@ -908,7 +1193,7 @@ const handleUpdateSticker = (id: string, updates: Partial<PlacedSticker>) => {
           setIsMirrored={setIsMirrored}
           startCaptureSequence={startCaptureSequence}
           onCancel={() => {
-            router.push("/operator");
+            router.push(`/operator/${eventSlug}?step=registrasi`);
           }}
           layoutsCount={(selectedFrameTemplate?.customSlots && selectedFrameTemplate.customSlots.length > 1)
             ? selectedFrameTemplate.customSlots.length
@@ -930,45 +1215,43 @@ const handleUpdateSticker = (id: string, updates: Partial<PlacedSticker>) => {
           onAddSticker={handleAddSticker}
           onRemoveSticker={handleRemoveSticker}
           onUpdateSticker={handleUpdateSticker}
+          customization={customization}
         />
       )}
 
-      {/* All other steps: centered padded layout */}
-      {step !== "setup" && step !== "capture" && step !== "share" && (
+      {/* Payment screen and other centered steps */}
+      {step !== "capture" && step !== "share" && (
         <div className={`flex-1 flex flex-col items-center justify-center w-full z-10 relative ${
           isScrollLocked ? "h-full py-2 overflow-hidden" : "py-10 px-4"
         }`}>
           <main className={`flex-1 flex flex-col items-center justify-center w-full relative ${
             isScrollLocked ? "h-full overflow-hidden" : ""
           }`}>
-
-            {slug && step === "payment" && (
-              <>
-                <PaymentScreen
-                  customerName={customerName}
-                  customerPhone={customerPhone}
-                  sessionsCount={sessionsCount}
-                  onPaymentSuccess={(method) => {
-                    setPaymentMethod(method);
-                    changeStep("capture");
-                  }}
-                  onCancel={() => {
-                    router.push("/operator");
-                  }}
-                  eventName={config.eventName}
-                  pricePerSession={config.pricePerSession}
-                  qrisUrl={config.qrisUrl}
-                />
-              </>
+            {eventSlug && sessionSlug && step === "payment" && (
+              <PaymentScreen
+                customerName={customerName}
+                customerPhone={customerPhone}
+                sessionsCount={sessionsCount}
+                onPaymentSuccess={(method) => {
+                  setPaymentMethod(method);
+                  changeStep("capture");
+                }}
+                onCancel={() => {
+                  router.push(`/operator/${eventSlug}?step=registrasi`);
+                }}
+                eventName={config.eventName}
+                pricePerSession={config.pricePerSession}
+                qrisUrl={config.qrisUrl}
+                customization={customization}
+              />
             )}
-
           </main>
         </div>
       )}
 
+      {/* Visual rendering overlay */}
       {isRendering && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-[9999] flex flex-col items-center justify-center gap-6 text-white select-none">
-          {/* Custom Animation CSS keyframes inline to isolate logic */}
           <style>{`
             @keyframes cameraShutter {
               0%, 100% { transform: scale(1); }
@@ -1017,33 +1300,20 @@ const handleUpdateSticker = (id: string, updates: Partial<PlacedSticker>) => {
             }
           `}</style>
 
-          {/* Animation Container */}
           <div className="relative flex flex-col items-center justify-center">
-            {/* Shutter Flash Effect */}
             <div className="absolute w-24 h-24 rounded-full bg-blue-400/25 blur-xl animate-flash pointer-events-none z-0" />
-
-            {/* Camera & Photo Printing Sandbox */}
             <div className="relative w-28 h-32 flex flex-col items-center justify-start z-10 select-none">
-              
-              {/* Sleek Camera Body */}
               <div className="relative w-20 h-14 bg-zinc-800 dark:bg-zinc-900 border-2 border-zinc-700 dark:border-zinc-800 rounded-2xl flex items-center justify-center shadow-xl animate-camera z-20">
-                {/* Red Camera Led Indicator */}
                 <div className="absolute top-2 right-3 w-1.5 h-1.5 rounded-full bg-rose-500 animate-ping" />
-                {/* Shutter Button */}
                 <div className="absolute -top-1 left-4 w-4 h-1.5 bg-zinc-700 dark:bg-zinc-850 rounded-t-sm" />
-                {/* Viewfinder */}
                 <div className="absolute top-2 left-3 w-3 h-2 bg-zinc-750 dark:bg-zinc-950 rounded border border-zinc-700/50" />
-                
-                {/* Camera Lens */}
                 <div className="w-9 h-9 rounded-full bg-zinc-900 dark:bg-zinc-950 border-2 border-zinc-700 dark:border-zinc-800 flex items-center justify-center relative overflow-hidden shadow-inner">
                   <div className="w-6 h-6 rounded-full border border-dashed border-blue-500/40 animate-lens" />
                   <div className="absolute w-2 h-2 rounded-full bg-white/20 top-1.5 left-1.5 blur-[0.5px]" />
                 </div>
               </div>
               
-              {/* Photo Strip Frame Emerging from Shutter */}
               <div className="absolute top-10 w-12 h-16 bg-white dark:bg-zinc-100 border border-zinc-300 dark:border-zinc-200 rounded p-1 shadow-md animate-print z-10 flex flex-col gap-0.5 justify-between">
-                {/* Grid containing mini slots mimicking photostrip slots */}
                 <div className="w-full h-[22%] bg-zinc-200 dark:bg-zinc-300 rounded-sm overflow-hidden flex items-center justify-center">
                   <Sparkles className="w-1.5 h-1.5 text-zinc-400" />
                 </div>
@@ -1053,12 +1323,10 @@ const handleUpdateSticker = (id: string, updates: Partial<PlacedSticker>) => {
                 <div className="w-full h-[22%] bg-zinc-200 dark:bg-zinc-300 rounded-sm overflow-hidden flex items-center justify-center">
                   <Star className="w-1.5 h-1.5 text-zinc-400" />
                 </div>
-                {/* Polaroid bottom border spacing */}
                 <div className="w-full h-[15%] flex justify-center items-center">
                   <div className="w-6 h-0.5 bg-zinc-300 rounded-full" />
                 </div>
               </div>
-
             </div>
           </div>
 

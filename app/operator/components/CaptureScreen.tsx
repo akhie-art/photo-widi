@@ -45,8 +45,8 @@ interface CaptureScreenProps {
   placedStickers: PlacedSticker[];
   onAddSticker: (sticker: StickerAsset) => void;
   onRemoveSticker: (id: string) => void;
-  // Menambahkan properti onUpdateSticker agar logic dari parent bisa berjalan
   onUpdateSticker: (id: string, updates: Partial<PlacedSticker>) => void;
+  customization?: any;
 }
 
 export default function CaptureScreen({
@@ -81,6 +81,7 @@ export default function CaptureScreen({
   onAddSticker,
   onRemoveSticker,
   onUpdateSticker,
+  customization,
 }: CaptureScreenProps) {
   const [activeTab, setActiveTab] = React.useState<"frame" | "filter" | "sticker">("frame");
   const containerRef = React.useRef<HTMLDivElement | null>(null);
@@ -132,6 +133,7 @@ export default function CaptureScreen({
           onSelectPreset={onSelectPreset}
           onSelectFilter={onSelectFilter}
           onAddSticker={onAddSticker}
+          customization={customization}
         />
       </div>
 
@@ -154,6 +156,7 @@ export default function CaptureScreen({
           layoutsCount={layoutsCount}
           currentCaptureNum={currentCaptureNum}
           poseAlert={poseAlert}
+          customization={customization}
         />
       </div>
 
@@ -182,7 +185,8 @@ export default function CaptureScreen({
           config={config}
           placedStickers={placedStickers}
           onRemoveSticker={onRemoveSticker}
-          onUpdateSticker={onUpdateSticker} /* Meneruskan onUpdateSticker di sini */
+          onUpdateSticker={onUpdateSticker}
+          customization={customization}
         />
       </div>
 

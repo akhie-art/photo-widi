@@ -1,7 +1,7 @@
 "use client";
 
 import { usePhotoboothStore } from "../../hooks/usePhotoboothStore";
-import HistoryTab from "../components/HistoryTab";
+import HistoryTab from "./components/HistoryTab";
 
 export default function HistoryPage() {
   const { photos, config, clearPhotos, deletePhoto } = usePhotoboothStore();

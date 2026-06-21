@@ -51,7 +51,7 @@ function LoginContent() {
               sessionStorage.setItem("glow_operator_name", displayName);
               sessionStorage.setItem("glow_operator_auth", "true");
               sessionStorage.removeItem("glow_admin_auth");
-              router.replace(redirectPath && redirectPath !== "/" ? redirectPath : "/operator");
+              router.replace(redirectPath && redirectPath !== "/" ? redirectPath : "/operator?step=event-terjadwal");
             }
           }
         }
@@ -134,7 +134,7 @@ function LoginContent() {
           sessionStorage.setItem("glow_operator_name", displayName);
           sessionStorage.setItem("glow_operator_auth", "true");
           sessionStorage.removeItem("glow_admin_auth");
-          router.push(redirectPath && redirectPath !== "/" ? redirectPath : "/operator");
+          router.push(redirectPath && redirectPath !== "/" ? redirectPath : "/operator?step=event-terjadwal");
         } else {
           setError("Akses ditolak: Peran pengguna tidak valid.");
           setLoading(false);

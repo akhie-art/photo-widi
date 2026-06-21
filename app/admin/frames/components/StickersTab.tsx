@@ -17,16 +17,16 @@ interface StickersTabProps {
 }
 
 export default function StickersTab({ config, addStickerAsset, deleteStickerAsset }: StickersTabProps) {
-  const [stickerFormName, setStickerFormName] = useState("");
   const [stickerType, setStickerType] = useState<"emoji" | "image">("emoji");
   const [stickerFormEmoji, setStickerFormEmoji] = useState("");
   const [stickerFormOverlay, setStickerFormOverlay] = useState<string | undefined>(undefined);
+  const [uploadedFileName, setUploadedFileName] = useState("");
   const [overlayUploading, setOverlayUploading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   
   // Delete dialog state
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [stickerToDelete, setStickerToDelete] = useState<{ id: string; name: string } | null>(null);
+  const [stickerToDelete, setStickerToDelete] = useState<string | null>(null);
 
   const handleTypeChange = (type: "emoji" | "image") => {
     setStickerType(type);
@@ -40,10 +40,6 @@ export default function StickersTab({ config, addStickerAsset, deleteStickerAsse
 
   const handleStickerSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!stickerFormName.trim()) {
-      toast.error("Nama stiker wajib diisi.");
-      return;
-    }
     if (isSaving) return;
     
     const imageUrl = stickerType === "image" ? stickerFormOverlay : stickerFormEmoji.trim();
@@ -57,13 +53,13 @@ export default function StickersTab({ config, addStickerAsset, deleteStickerAsse
     }
     
     setIsSaving(true);
-    const success = await addStickerAsset({ name: stickerFormName.trim(), imageUrl });
+    const success = await addStickerAsset({ imageUrl });
     setIsSaving(false);
 
     if (success) {
-      setStickerFormName("");
       setStickerFormEmoji("");
       setStickerFormOverlay(undefined);
+      setUploadedFileName("");
       setOverlayUploading(false);
       toast.success("Aset stiker berhasil ditambahkan!");
     }
@@ -81,6 +77,7 @@ export default function StickersTab({ config, addStickerAsset, deleteStickerAsse
       return;
     }
     setOverlayUploading(true);
+    setUploadedFileName(file.name.replace(/\.[^/.]+$/, ""));
     const reader = new FileReader();
     reader.onload = ev => {
       setStickerFormOverlay(ev.target?.result as string);
@@ -100,12 +97,12 @@ export default function StickersTab({ config, addStickerAsset, deleteStickerAsse
         }}
         onConfirm={() => {
           if (stickerToDelete) {
-            deleteStickerAsset(stickerToDelete.id);
-            toast.success(`Stiker "${stickerToDelete.name}" berhasil dihapus.`);
+            deleteStickerAsset(stickerToDelete);
+            toast.success("Stiker berhasil dihapus.");
           }
         }}
         title="Hapus Stiker"
-        description={`Apakah Anda yakin ingin menghapus stiker "${stickerToDelete?.name || ""}"? Tindakan ini tidak dapat dibatalkan.`}
+        description="Apakah Anda yakin ingin menghapus stiker ini? Tindakan ini tidak dapat dibatalkan."
       />
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start animate-fade-in duration-300">
@@ -128,14 +125,14 @@ export default function StickersTab({ config, addStickerAsset, deleteStickerAsse
               return (
                 <div 
                   key={sticker.id} 
-                  className="group relative aspect-square bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl p-4 flex flex-col items-center justify-center gap-2 hover:border-zinc-300 dark:hover:border-zinc-700 hover:shadow-[0_8px_30px_rgb(0,0,0,0.02)] transition-all duration-300 cursor-default"
+                  className="group relative aspect-square bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl p-4 flex flex-col items-center justify-center hover:border-zinc-300 dark:hover:border-zinc-700 hover:shadow-[0_8px_30px_rgb(0,0,0,0.02)] transition-all duration-300 cursor-default"
                 >
                   {/* Image/Emoji wrapper */}
                   <div className="flex-1 flex items-center justify-center min-h-0 w-full transform group-hover:scale-110 transition-transform duration-300">
                     {isImg ? (
                       <img 
                         src={sticker.imageUrl} 
-                        alt={sticker.name} 
+                        alt="Stiker" 
                         className="max-w-full max-h-full object-contain pointer-events-none drop-shadow-sm" 
                       />
                     ) : (
@@ -143,15 +140,10 @@ export default function StickersTab({ config, addStickerAsset, deleteStickerAsse
                     )}
                   </div>
                   
-                  {/* Sticker Name */}
-                  <span className="text-[10px] text-zinc-500 dark:text-zinc-400 font-medium truncate w-full text-center px-1">
-                    {sticker.name}
-                  </span>
-                  
                   {/* Touch-friendly float delete button */}
                   <button 
                     onClick={() => {
-                      setStickerToDelete({ id: sticker.id, name: sticker.name });
+                      setStickerToDelete(sticker.id);
                       setDeleteDialogOpen(true);
                     }} 
                     className="absolute top-2 right-2 p-1.5 text-zinc-400 hover:text-red-500 hover:bg-red-500/10 dark:hover:bg-red-500/20 transition-all bg-zinc-50 dark:bg-zinc-900 border border-zinc-200/60 dark:border-zinc-800 rounded-lg cursor-pointer"
@@ -188,17 +180,7 @@ export default function StickersTab({ config, addStickerAsset, deleteStickerAsse
         </div>
 
         <form onSubmit={handleStickerSubmit} className="space-y-4">
-          {/* Form input: Name */}
-          <div className="space-y-1.5">
-            <Label className="text-xs font-semibold text-zinc-650 dark:text-zinc-400">Nama Stiker</Label>
-            <Input 
-              required 
-              value={stickerFormName} 
-              onChange={e => setStickerFormName(e.target.value)} 
-              placeholder="Contoh: Kacamata Keren" 
-              className="h-10 rounded-lg border-zinc-200 dark:border-zinc-800 bg-card text-xs focus-visible:ring-zinc-900 dark:focus-visible:ring-white" 
-            />
-          </div>
+
 
           {/* Type Toggle Tabs */}
           <div className="space-y-1.5">

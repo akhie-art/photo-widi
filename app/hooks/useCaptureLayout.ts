@@ -52,14 +52,12 @@ export function useCaptureLayout({
 
   // ─── Canvas dimensions ────────────────────────────────────────────────────────
   const getLayoutDimensions = React.useCallback((): { w: number; h: number } => {
-    const overlayH = activeTemplate?.overlayH ?? 100;
+    if (isCustomFrame && activeTemplate) {
+      const is2R = activeTemplate.paperSize === "2R" || !activeTemplate.paperSize;
+      return { w: is2R ? 591 : 1205, h: is2R ? 1772 : 1795 };
+    }
+
     if (activeLayout === "strip") {
-      const isDesignedForTile = isCustomFrame && overlayH <= 50;
-      if (isCustomFrame && isDesignedForTile) {
-        const tileH = (overlayH / 100) * 1202.5;
-        const h = STRIP_PADDING + layoutsCount * tileH + STRIP_PADDING;
-        return { w: STRIP_W, h };
-      }
       const h =
         STRIP_PADDING +
         layoutsCount * STRIP_PHOTO_H +
@@ -70,22 +68,12 @@ export function useCaptureLayout({
     } else if (activeLayout === "grid") {
       const gW = 800, gPad = 40, gGap = 25;
       const gPhW = (gW - gPad * 2 - gGap) / 2;
-      if (isCustomFrame) {
-        const scaleX = gPhW / 500;
-        const tileH = (overlayH / 100) * 1202.5 * scaleX;
-        const h = gPad + 2 * tileH + gGap + gPad;
-        return { w: gW, h };
-      }
       const h = gPad + 2 * gPhW + gGap + 130 + gPad;
       return { w: gW, h };
     } else {
       // polaroid
       const pW = 600, pPad = 35;
       const pPhW = pW - pPad * 2;
-      if (isCustomFrame) {
-        const is2R = activeTemplate?.paperSize === "2R";
-        return { w: is2R ? 591 : 1205, h: is2R ? 1772 : 1795 };
-      }
       const h = pPad + pPhW + 140 + pPad;
       return { w: pW, h };
     }
@@ -97,56 +85,25 @@ export function useCaptureLayout({
 
   // ─── Per-slot position percentages ────────────────────────────────────────────
   const slots = React.useMemo(() => {
+    if (isCustomFrame && activeTemplate) {
+      const slotsList = (activeTemplate.customSlots && activeTemplate.customSlots.length > 0)
+        ? activeTemplate.customSlots
+        : [{ id: "default_0", xPct: 5, yPct: 5, widthPct: 90, heightPct: 90, rotation: 0 }];
+
+      const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
+      const sortedSlots = [...slotsList].sort((a, b) => collator.compare(a.id, b.id));
+
+      return sortedSlots.map(s => ({
+        left:   `${s.xPct}%`,
+        top:    `${s.yPct}%`,
+        width:  `${s.widthPct}%`,
+        height: `${s.heightPct}%`,
+      }));
+    }
+
     const { w: cW, h: cH } = getLayoutDimensions();
-    const overlayH = activeTemplate?.overlayH ?? 100;
 
     if (activeLayout === "strip") {
-      const isDesignedForTile = isCustomFrame && overlayH <= 50;
-
-      if (isCustomFrame) {
-        const slot = (activeTemplate?.customSlots && activeTemplate.customSlots.length > 0)
-          ? activeTemplate.customSlots[0]
-          : { xPct: 5, yPct: 5, widthPct: 90, heightPct: 90, rotation: 0 };
-
-        const scaleX = cW / 500;
-
-        return Array.from({ length: layoutsCount }).map((_, i) => {
-          let sy = 0, sh = 0;
-          if (isDesignedForTile) {
-            const scaleY = scaleX;
-            const tileH = (overlayH / 100) * 1202.5 * scaleY;
-            const tileY = STRIP_PADDING + i * tileH;
-            sh = (slot.heightPct / 100) * 1202.5 * scaleY;
-            sy = tileY + (slot.yPct / 100) * 1202.5 * scaleY;
-          } else {
-            const th = cH / layoutsCount;
-            const scaleY = th / 1202.5;
-            sh = (slot.heightPct / 100) * 1202.5 * scaleY;
-            sy = (i * th) + (slot.yPct / 100) * 1202.5 * scaleY;
-          }
-          const sw = (slot.widthPct / 100) * 500 * scaleX;
-          const sx = (slot.xPct / 100) * 500 * scaleX;
-
-          return {
-            left: `${(sx / cW) * 100}%`,
-            top: `${(sy / cH) * 100}%`,
-            width: `${(sw / cW) * 100}%`,
-            height: `${(sh / cH) * 100}%`,
-          };
-        });
-      }
-
-      if (activeTemplate?.customSlots && activeTemplate.customSlots.length > 1) {
-        const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
-        const sortedSlots = [...activeTemplate.customSlots].sort((a, b) => collator.compare(a.id, b.id));
-        return sortedSlots.map(s => ({
-          left:   `${s.xPct}%`,
-          top:    `${s.yPct}%`,
-          width:  `${s.widthPct}%`,
-          height: `${s.heightPct}%`,
-        }));
-      }
-
       if (isFilmFrame) {
         return [
           { left: "13%", width: "74%", top: "4%",    height: "29%" },
@@ -188,37 +145,6 @@ export function useCaptureLayout({
       const gW = 800, gPad = 40, gGap = 25;
       const gPhW = (gW - gPad * 2 - gGap) / 2;
 
-      if (isCustomFrame) {
-        const slot = (activeTemplate?.customSlots && activeTemplate.customSlots.length > 0)
-          ? activeTemplate.customSlots[0]
-          : { xPct: 5, yPct: 5, widthPct: 90, heightPct: 90, rotation: 0 };
-
-        const cols = 2;
-        const scaleX = gPhW / 500;
-        const scaleY = scaleX;
-
-        const tileH = (overlayH / 100) * 1202.5 * scaleY;
-        const tw = gPhW;
-
-        return Array.from({ length: layoutsCount }).map((_, i) => {
-          const gridCol = i % cols;
-          const gridRow = Math.floor(i / cols);
-
-          const sw = (slot.widthPct / 100) * 500 * scaleX;
-          const sh = (slot.heightPct / 100) * 1202.5 * scaleY;
-
-          const sx = gPad + gridCol * (tw + gGap) + (slot.xPct / 100) * 500 * scaleX;
-          const sy = gPad + gridRow * (tileH + gGap) + (slot.yPct / 100) * 1202.5 * scaleY;
-
-          return {
-            left: `${(sx / cW) * 100}%`,
-            top: `${(sy / cH) * 100}%`,
-            width: `${(sw / cW) * 100}%`,
-            height: `${(sh / cH) * 100}%`,
-          };
-        });
-      }
-
       return [
         { x: gPad,         y: gPad },
         { x: gPad + gPhW + gGap, y: gPad },
@@ -235,32 +161,6 @@ export function useCaptureLayout({
       const pW = 600, pPad = 35;
       const pPhW = pW - pPad * 2;
 
-      if (isCustomFrame) {
-        const slotsList = (activeTemplate?.customSlots && activeTemplate.customSlots.length > 0)
-          ? activeTemplate.customSlots
-          : [{ id: "default_0", xPct: 5, yPct: 5, widthPct: 90, heightPct: 90, rotation: 0 }];
-
-        const scaleX = cW / 500;
-        const scaleY = cH / 1202.5;
-
-        const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
-        const sortedSlots = [...slotsList].sort((a, b) => collator.compare(a.id, b.id));
-
-        return sortedSlots.map(s => {
-          const sw = (s.widthPct / 100) * 500 * scaleX;
-          const sh = (s.heightPct / 100) * 1202.5 * scaleY;
-          const sx = (s.xPct / 100) * 500 * scaleX;
-          const sy = (s.yPct / 100) * 1202.5 * scaleY;
-
-          return {
-            left: `${(sx / cW) * 100}%`,
-            top: `${(sy / cH) * 100}%`,
-            width: `${(sw / cW) * 100}%`,
-            height: `${(sh / cH) * 100}%`,
-          };
-        });
-      }
-
       return [
         {
           left:   `${(pPad  / pW)  * 100}%`,
@@ -270,116 +170,29 @@ export function useCaptureLayout({
         },
       ];
     }
-  }, [getLayoutDimensions, activeLayout, activeTemplate, isCustomFrame, layoutsCount, frameStyle]);
+  }, [getLayoutDimensions, activeLayout, activeTemplate, isCustomFrame, layoutsCount, frameStyle, isFilmFrame, isRedVintage]);
 
   // ─── Overlays calculation ──────────────────────────────────────────────────
   const displayOverlays = React.useMemo(() => {
-    const { w: cW, h: cH } = getLayoutDimensions();
-    const overlayH = activeTemplate?.overlayH ?? 100;
-    const overlayX = activeTemplate?.overlayX ?? 0;
-    const overlayY = activeTemplate?.overlayY ?? 0;
-    const overlayW = activeTemplate?.overlayW ?? 100;
+    if (isCustomFrame && activeTemplate) {
+      if (activeTemplate.imageOverlay) {
+        const ox = activeTemplate.overlayX ?? 0;
+        const oy = activeTemplate.overlayY ?? 0;
+        const ow = activeTemplate.overlayW ?? 100;
+        const oh = activeTemplate.overlayH ?? 100;
+        return [{
+          left: `${ox}%`,
+          top: `${oy}%`,
+          width: `${ow}%`,
+          height: `${oh}%`,
+        }];
+      }
+      return [];
+    }
 
     let overlaysList: Array<{ left: string; top: string; width: string; height: string }> = [];
 
-    if (isCustomFrame && activeTemplate?.imageOverlay) {
-      if (activeLayout === "strip") {
-        const isDesignedForTile = overlayH <= 50;
-        const scaleX = cW / 500; // 1
-
-        overlaysList = Array.from({ length: layoutsCount }).map((_, i) => {
-          let oy = 0, oh = 0;
-          if (isDesignedForTile) {
-            const scaleY = scaleX;
-            const tileH = (overlayH / 100) * 1202.5 * scaleY;
-            const tileY = STRIP_PADDING + i * tileH;
-            oh = tileH;
-            oy = tileY + (overlayY / 100) * 1202.5 * scaleY;
-          } else {
-            const th = cH / layoutsCount;
-            const scaleY = th / 1202.5;
-            oh = (overlayH / 100) * 1202.5 * scaleY;
-            oy = (i * th) + (overlayY / 100) * 1202.5 * scaleY;
-          }
-          const ow = (overlayW / 100) * 500 * scaleX;
-          const ox = (overlayX / 100) * 500 * scaleX;
-
-          return {
-            left: `${(ox / cW) * 100}%`,
-            top: `${(oy / cH) * 100}%`,
-            width: `${(ow / cW) * 100}%`,
-            height: `${(oh / cH) * 100}%`,
-          };
-        });
-      } else if (activeLayout === "grid") {
-        const gW = 800, gPad = 40, gGap = 25;
-        const gPhW = (gW - gPad * 2 - gGap) / 2;
-
-        const cols = 2;
-        const scaleX = gPhW / 500;
-        const scaleY = scaleX;
-
-        const tileH = (overlayH / 100) * 1202.5 * scaleY;
-        const tw = gPhW;
-
-        overlaysList = Array.from({ length: layoutsCount }).map((_, i) => {
-          const gridCol = i % cols;
-          const gridRow = Math.floor(i / cols);
-
-          const ow = (overlayW / 100) * 500 * scaleX;
-          const oh = tileH;
-
-          const ox = gPad + gridCol * (tw + gGap) + (overlayX / 100) * 500 * scaleX;
-          const oy = gPad + gridRow * (tileH + gGap) + (overlayY / 100) * 1202.5 * scaleY;
-          return {
-            left: `${(ox / cW) * 100}%`,
-            top: `${(oy / cH) * 100}%`,
-            width: `${(ow / cW) * 100}%`,
-            height: `${(oh / cH) * 100}%`,
-          };
-        });
-      } else {
-        // polaroid
-        const pW = 600, pPad = 35;
-        const pPhW = pW - pPad * 2;
-
-        if (isCustomFrame) {
-          const scaleX = cW / 500;
-          const scaleY = cH / 1202.5;
-
-          const ow = (overlayW / 100) * 500 * scaleX;
-          const oh = (overlayH / 100) * 1202.5 * scaleY;
-
-          const ox = (overlayX / 100) * 500 * scaleX;
-          const oy = (overlayY / 100) * 1202.5 * scaleY;
-
-          overlaysList = [{
-            left: `${(ox / cW) * 100}%`,
-            top: `${(oy / cH) * 100}%`,
-            width: `${(ow / cW) * 100}%`,
-            height: `${(oh / cH) * 100}%`,
-          }];
-        } else {
-          const scaleX = pPhW / 500;
-          const scaleY = scaleX;
-
-          const tileH = (overlayH / 100) * 1202.5 * scaleY;
-
-          const ow = (overlayW / 100) * 500 * scaleX;
-          const oh = tileH;
-
-          const ox = pPad + (overlayX / 100) * 500 * scaleX;
-          const oy = pPad + (overlayY / 100) * 1202.5 * scaleY;
-
-          overlaysList = [{
-            left: `${(ox / cW) * 100}%`,
-            top: `${(oy / cH) * 100}%`,
-            width: `${(ow / cW) * 100}%`,
-            height: `${(oh / cH) * 100}%`,
-          }];
-        }
-      }
-    } else if (activeTemplate?.imageOverlay) {
+    if (activeTemplate?.imageOverlay) {
       overlaysList = [{
         left: `${activeTemplate.overlayX ?? 0}%`,
         top: `${activeTemplate.overlayY ?? 0}%`,

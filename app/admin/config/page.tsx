@@ -1,7 +1,7 @@
 "use client";
 
 import { usePhotoboothStore } from "../../hooks/usePhotoboothStore";
-import ConfigTab from "../components/ConfigTab";
+import ConfigTab from "./components/ConfigTab";
 
 export default function ConfigPage() {
   const { config, updateConfig } = usePhotoboothStore();

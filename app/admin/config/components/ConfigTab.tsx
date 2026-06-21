@@ -1,19 +1,16 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Camera, ImagePlus, X, Wallet, Sparkles, Receipt, Database, RefreshCw, Copy, CheckCircle2, AlertTriangle, Check, ExternalLink, HardDrive, Info } from "lucide-react";
+import { ImagePlus, X, Wallet, Sparkles, Receipt, Database, RefreshCw, Copy, CheckCircle2, AlertTriangle, Check, ExternalLink, HardDrive, Info, Printer, Camera } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
-import { EventConfig } from "../../hooks/usePhotoboothStore";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { EventConfig } from "../../../hooks/usePhotoboothStore";
 import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
-
-interface ConfigTabProps {
-  config: EventConfig;
-  updateConfig: (newConfigFields: Partial<EventConfig>) => Promise<boolean>;
-}
+import { ConfigTabProps } from "../types";
 
 export default function ConfigTab({ config, updateConfig }: ConfigTabProps) {
   const [logoUrl, setLogoUrl] = useState("");
@@ -21,6 +18,20 @@ export default function ConfigTab({ config, updateConfig }: ConfigTabProps) {
   const [pricePerSession, setPricePerSession] = useState(25000);
   const [qrisUrl, setQrisUrl] = useState("");
   const [isSaving, setIsSaving] = useState(false);
+
+  // States for Printer and Camera connection
+  const [printerName, setPrinterName] = useState("Default USB Printer");
+  const [printerPaperLimit, setPrinterPaperLimit] = useState(100);
+  const [cameraDeviceId, setCameraDeviceId] = useState("default");
+  const [cameraResolution, setCameraResolution] = useState("1080p");
+  const [cameras, setCameras] = useState<MediaDeviceInfo[]>([]);
+  const [printerConnectionType, setPrinterConnectionType] = useState<"usb" | "bluetooth" | "browser">("usb");
+  const [bluetoothDeviceName, setBluetoothDeviceName] = useState("");
+  const [isPairingBluetooth, setIsPairingBluetooth] = useState(false);
+  const [isBluetoothModalOpen, setIsBluetoothModalOpen] = useState(false);
+  const [isPairingUsb, setIsPairingUsb] = useState(false);
+  const [systemPrinters, setSystemPrinters] = useState<string[]>([]);
+  const [isAgentOnline, setIsAgentOnline] = useState(false);
 
   // States for Supabase Storage check
   const [bucketStatus, setBucketStatus] = useState<Record<string, boolean>>({
@@ -48,8 +59,217 @@ export default function ConfigTab({ config, updateConfig }: ConfigTabProps) {
       setEventName(config.eventName || "");
       setPricePerSession(config.pricePerSession ?? 25000);
       setQrisUrl(config.qrisUrl || "");
+      setPrinterName(config.printerName || "Default USB Printer");
+      setPrinterPaperLimit(config.printerPaperLimit ?? 100);
+      setCameraDeviceId(config.cameraDeviceId || "default");
+      setCameraResolution(config.cameraResolution || "1080p");
+      setPrinterConnectionType(
+        config.printerConnectionType === "browser" ? "usb" : (config.printerConnectionType || "usb")
+      );
+      setBluetoothDeviceName(config.bluetoothDeviceName || "");
     }
   }, [config]);
+
+  // Load camera devices
+  useEffect(() => {
+    if (typeof navigator === "undefined" || !navigator.mediaDevices) return;
+    const getCameras = async () => {
+      try {
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const videoDevices = devices.filter((device) => device.kind === "videoinput");
+        setCameras(videoDevices);
+      } catch (err) {
+        console.error("Error accessing camera list:", err);
+      }
+    };
+    getCameras();
+  }, []);
+
+  // Load system printers list from local print agent
+  useEffect(() => {
+    if (printerConnectionType !== "usb") {
+      setIsAgentOnline(false);
+      return;
+    }
+    const fetchSystemPrinters = async () => {
+      try {
+        const res = await fetch("http://localhost:5001/printers");
+        if (res.ok) {
+          const data = await res.json();
+          if (data.success && Array.isArray(data.printers)) {
+            setSystemPrinters(data.printers);
+            setIsAgentOnline(true);
+            
+            // If current config's printerName is empty, auto-select first detected printer
+            if (data.printers.length > 0 && (!printerName || printerName === "Default USB Printer")) {
+              setPrinterName(data.printers[0]);
+            }
+          }
+        }
+      } catch (err) {
+        setIsAgentOnline(false);
+      }
+    };
+    fetchSystemPrinters();
+  }, [printerName, printerConnectionType]);
+
+  const handlePairBluetooth = async () => {
+    if (typeof navigator === "undefined" || !(navigator as any).bluetooth) {
+      toast.error("Web Bluetooth tidak didukung oleh browser ini. Gunakan Chrome atau Edge.");
+      return;
+    }
+
+    setIsPairingBluetooth(true);
+    try {
+      const device = await (navigator as any).bluetooth.requestDevice({
+        acceptAllDevices: true,
+        optionalServices: ['000018f0-0000-1000-8000-00805f9b34fb'] // standard 16-bit UUID for printer service
+      });
+
+      if (device && device.name) {
+        setBluetoothDeviceName(device.name);
+        toast.success(`Berhasil dipasangkan dengan ${device.name}!`);
+        setIsBluetoothModalOpen(false);
+      } else if (device) {
+        setBluetoothDeviceName(device.id || "Bluetooth Printer");
+        toast.success("Berhasil dipasangkan dengan printer Bluetooth!");
+        setIsBluetoothModalOpen(false);
+      }
+    } catch (err: any) {
+      console.warn("Bluetooth pairing cancelled or failed:", err);
+      if (err.name !== "NotFoundError") {
+        toast.error(`Gagal menghubungkan Bluetooth: ${err.message || err}`);
+      }
+    } finally {
+      setIsPairingBluetooth(false);
+    }
+  };
+
+  const handlePairUsb = async () => {
+    if (typeof navigator === "undefined" || !(navigator as any).usb) {
+      toast.error("WebUSB tidak didukung oleh browser ini. Gunakan Chrome atau Edge.");
+      return;
+    }
+
+    setIsPairingUsb(true);
+    try {
+      // filters: [] lets the user select any USB device
+      const device = await (navigator as any).usb.requestDevice({ filters: [] });
+      if (device) {
+        const name = device.productName || `USB Device (${device.vendorId}:${device.productId})`;
+        setPrinterName(name);
+        toast.success(`Berhasil mendeteksi printer: ${name}`);
+      }
+    } catch (err: any) {
+      console.warn("USB discovery cancelled or failed:", err);
+      if (err.name !== "NotFoundError") {
+        toast.error(`Gagal mendeteksi perangkat USB: ${err.message || err}`);
+      }
+    } finally {
+      setIsPairingUsb(false);
+    }
+  };
+
+
+  const handleBrowserTestPrint = () => {
+    try {
+      const iframe = document.createElement("iframe");
+      iframe.style.position = "fixed";
+      iframe.style.right = "0";
+      iframe.style.bottom = "0";
+      iframe.style.width = "0";
+      iframe.style.height = "0";
+      iframe.style.border = "0";
+      document.body.appendChild(iframe);
+
+      const iframeDoc = iframe.contentDocument || iframe.contentWindow?.document;
+      if (iframeDoc) {
+        iframeDoc.write(`
+          <html>
+            <head>
+              <title>Test Print Photo Strip</title>
+              <style>
+                body {
+                  margin: 0;
+                  display: flex;
+                  flex-direction: column;
+                  justify-content: center;
+                  align-items: center;
+                  background-color: white;
+                  font-family: 'Courier New', Courier, monospace;
+                  padding: 20px;
+                  box-sizing: border-box;
+                  text-align: center;
+                }
+                .strip {
+                  width: 300px;
+                  border: 2px dashed #000;
+                  padding: 20px;
+                  background: white;
+                }
+                h1 {
+                  font-size: 18px;
+                  margin: 0 0 10px 0;
+                }
+                p {
+                  font-size: 12px;
+                  margin: 5px 0;
+                }
+                .box {
+                  width: 100%;
+                  height: 150px;
+                  border: 1px solid #000;
+                  margin: 15px 0;
+                  display: flex;
+                  align-items: center;
+                  justify-content: center;
+                  font-size: 14px;
+                  font-weight: bold;
+                }
+                @page {
+                  margin: 0;
+                  size: auto;
+                }
+                @media print {
+                  body {
+                    background-color: white;
+                  }
+                }
+              </style>
+            </head>
+            <body>
+              <div class="strip">
+                <h1>GLOW PHOTOBOOTH</h1>
+                <p>=== TEST PRINT DIALOG ===</p>
+                <p>Waktu: ${new Date().toLocaleString()}</p>
+                <div class="box">PHOTO SLOT #1</div>
+                <div class="box">PHOTO SLOT #2</div>
+                <p>=========================</p>
+                <p>Status: Printer Terkoneksi!</p>
+                <p>Terima Kasih</p>
+              </div>
+              <script>
+                window.focus();
+                window.print();
+              </script>
+            </body>
+          </html>
+        `);
+        iframeDoc.close();
+
+        iframe.contentWindow?.addEventListener("afterprint", () => {
+          document.body.removeChild(iframe);
+        });
+        toast.success("Membuka dialog uji coba pencetakan...");
+      } else {
+        toast.error("Gagal menyiapkan media cetak bawaan browser.");
+      }
+    } catch (e) {
+      console.error("Browser test print error:", e);
+      toast.error("Gagal melakukan uji coba cetak.");
+    }
+  };
+
 
   // Fallback function to calculate bucket size from client side
   const getBucketSizeFallback = useCallback(async (bucketName: string): Promise<number> => {
@@ -172,6 +392,12 @@ export default function ConfigTab({ config, updateConfig }: ConfigTabProps) {
       eventName,
       pricePerSession,
       qrisUrl,
+      printerName,
+      printerPaperLimit,
+      cameraDeviceId,
+      cameraResolution,
+      printerConnectionType,
+      bluetoothDeviceName,
     });
     setIsSaving(false);
 
@@ -434,6 +660,203 @@ $$ language plpgsql;`;
                   </label>
                 )}
               </div>
+            </CardContent>
+          </Card>
+
+          {/* BAGIAN 3: KONEKSI KAMERA */}
+          <Card className="bg-white dark:bg-zinc-950 border-none ring-1 ring-inset ring-zinc-200/80 dark:ring-zinc-800/60 rounded-2xl shadow-[0_4px_20px_rgb(0,0,0,0.01)] flex flex-col">
+            <CardHeader className="pb-3 border-b border-zinc-100 dark:border-zinc-900">
+              <CardTitle className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
+                <Camera className="w-4 h-4 text-zinc-500" /> Koneksi Kamera
+              </CardTitle>
+              <CardDescription className="text-xs text-zinc-500 mt-0.5">
+                Pilih perangkat input video default dan resolusi capture untuk photobooth Anda.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="pt-5 flex flex-col gap-4 flex-1">
+              
+              {/* Pilihan Perangkat Kamera */}
+              <div className="flex flex-col gap-1.5">
+                <Label className="text-xs font-medium text-zinc-600 dark:text-zinc-400">Pilih Kamera Utama</Label>
+                <div className="relative flex items-center">
+                  <Camera className="absolute left-3.5 w-4 h-4 text-zinc-400 pointer-events-none" />
+                  <select
+                    value={cameraDeviceId}
+                    onChange={(e) => setCameraDeviceId(e.target.value)}
+                    className="pl-10 pr-10 h-10 w-full rounded-xl bg-white dark:bg-zinc-950 border-none ring-1 ring-inset ring-zinc-200/80 dark:ring-zinc-800/80 focus-visible:ring-2 focus-visible:ring-zinc-400 shadow-sm text-xs cursor-pointer outline-none appearance-none"
+                  >
+                    <option value="default">Kamera Default Sistem</option>
+                    {cameras.map((device) => (
+                      <option key={device.deviceId} value={device.deviceId}>
+                        {device.label || `Camera (${device.deviceId.slice(0, 5)}...)`}
+                      </option>
+                    ))}
+                  </select>
+                  <div className="absolute right-3.5 pointer-events-none text-zinc-450 text-[10px]">
+                    ▼
+                  </div>
+                </div>
+              </div>
+
+              {/* Resolusi Capture Kamera */}
+              <div className="flex flex-col gap-1.5">
+                <Label className="text-xs font-medium text-zinc-600 dark:text-zinc-400">Resolusi Kamera</Label>
+                <div className="relative flex items-center">
+                  <span className="absolute left-3.5 text-xs text-zinc-400 dark:text-zinc-500 font-medium font-mono select-none">RES</span>
+                  <select
+                    value={cameraResolution}
+                    onChange={(e) => setCameraResolution(e.target.value)}
+                    className="pl-12 pr-10 h-10 w-full rounded-xl bg-white dark:bg-zinc-950 border-none ring-1 ring-inset ring-zinc-200/80 dark:ring-zinc-800/80 focus-visible:ring-2 focus-visible:ring-zinc-400 shadow-sm text-xs cursor-pointer outline-none appearance-none"
+                  >
+                    <option value="720p">1280 x 720 (720p HD)</option>
+                    <option value="1080p">1920 x 1080 (1080p Full HD)</option>
+                    <option value="4k">3840 x 2160 (4K Ultra HD)</option>
+                  </select>
+                  <div className="absolute right-3.5 pointer-events-none text-zinc-455 text-[10px]">
+                    ▼
+                  </div>
+                </div>
+              </div>
+
+            </CardContent>
+          </Card>
+
+          {/* BAGIAN 4: KONEKSI PRINTER */}
+          <Card className="bg-white dark:bg-zinc-950 border-none ring-1 ring-inset ring-zinc-200/80 dark:ring-zinc-800/60 rounded-2xl shadow-[0_4px_20px_rgb(0,0,0,0.01)] flex flex-col">
+            <CardHeader className="pb-3 border-b border-zinc-100 dark:border-zinc-900">
+              <CardTitle className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
+                <Printer className="w-4 h-4 text-zinc-500" /> Koneksi Printer
+              </CardTitle>
+              <CardDescription className="text-xs text-zinc-500 mt-0.5">
+                Konfigurasikan jenis koneksi printer (USB/Bluetooth) dan kapasitas kertas Anda.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="pt-5 flex flex-col gap-4 flex-1">
+              
+              {/* Jenis Koneksi Printer */}
+              <div className="flex flex-col gap-1.5">
+                <Label className="text-xs font-medium text-zinc-600 dark:text-zinc-400">Jenis Koneksi</Label>
+                <div className="grid grid-cols-2 gap-2">
+                  {[
+                    { id: "usb", label: "Kabel USB" },
+                    { id: "bluetooth", label: "Bluetooth Wireless" },
+                  ].map((type) => {
+                    const isSelected = printerConnectionType === type.id;
+                    return (
+                      <button
+                        key={type.id}
+                        type="button"
+                        onClick={() => setPrinterConnectionType(type.id as "usb" | "bluetooth")}
+                        className={`flex items-center justify-center p-2.5 rounded-xl border text-xs font-semibold cursor-pointer transition-all select-none ${
+                          isSelected
+                            ? "bg-zinc-900 border-zinc-900 text-white dark:bg-zinc-100 dark:border-zinc-100 dark:text-zinc-900 shadow-sm"
+                            : "bg-white border-zinc-200 text-zinc-650 hover:bg-zinc-50 dark:bg-zinc-950 dark:border-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-900"
+                        }`}
+                      >
+                        {type.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Conditional Inputs based on Connection Type */}
+              {printerConnectionType === "usb" && (
+                /* Nama Driver Printer USB */
+                <div className="flex flex-col gap-1.5 animate-fade-in duration-150">
+                  <div className="flex justify-between items-center">
+                    <Label className="text-xs font-medium text-zinc-600 dark:text-zinc-400">Nama/Driver Printer USB</Label>
+                    <button
+                      type="button"
+                      onClick={handlePairUsb}
+                      disabled={isPairingUsb}
+                      className="text-[10px] text-zinc-550 hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-zinc-200 font-semibold underline flex items-center gap-1 cursor-pointer"
+                    >
+                      {isPairingUsb ? "Mencari..." : "Deteksi Otomatis USB"}
+                    </button>
+                  </div>
+                  <div className="relative flex items-center">
+                    <Printer className="absolute left-3.5 w-4 h-4 text-zinc-400 pointer-events-none z-10" />
+                    {isAgentOnline && systemPrinters.length > 0 ? (
+                      <select
+                        value={printerName}
+                        onChange={(e) => setPrinterName(e.target.value)}
+                        className="pl-10 pr-10 h-10 w-full rounded-xl bg-white dark:bg-zinc-950 border-none ring-1 ring-inset ring-zinc-200/80 dark:ring-zinc-800/80 focus-visible:ring-2 focus-visible:ring-zinc-400 shadow-sm text-xs cursor-pointer outline-none appearance-none"
+                      >
+                        {systemPrinters.map((p) => (
+                          <option key={p} value={p}>
+                            {p.replace(/_/g, " ")}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <Input
+                        type="text"
+                        required={printerConnectionType === "usb"}
+                        value={printerName}
+                        onChange={(e) => setPrinterName(e.target.value)}
+                        placeholder="Contoh: DNP DS-RX1 HS"
+                        className="h-10 pl-9 rounded-xl bg-white dark:bg-zinc-950 border-none ring-1 ring-inset ring-zinc-200/80 dark:ring-zinc-800/80 focus-visible:ring-2 focus-visible:ring-zinc-400 shadow-sm text-xs"
+                      />
+                    )}
+                    {isAgentOnline && systemPrinters.length > 0 && (
+                      <div className="absolute right-3.5 pointer-events-none text-zinc-450 text-[10px] z-10">
+                        ▼
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Koneksi Bluetooth */}
+              {printerConnectionType === "bluetooth" && (
+                <div className="flex flex-col gap-1.5 bg-zinc-50/50 dark:bg-zinc-900/20 ring-1 ring-inset ring-zinc-200/60 dark:ring-zinc-800/40 rounded-xl p-3.5 animate-fade-in duration-150">
+                  <div className="flex justify-between items-center mb-1">
+                    <span className="text-xs font-semibold text-zinc-800 dark:text-zinc-200">Printer Bluetooth</span>
+                    <span className="text-[9px] font-bold text-zinc-400 uppercase">STATUS</span>
+                  </div>
+                  {bluetoothDeviceName ? (
+                    <div className="flex items-center justify-between p-2.5 bg-white dark:bg-zinc-900 rounded-lg ring-1 ring-zinc-200/80 dark:ring-zinc-800/80">
+                      <div className="flex items-center gap-2">
+                        <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                        <span className="text-xs font-semibold text-zinc-800 dark:text-zinc-200">{bluetoothDeviceName}</span>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        onClick={() => setBluetoothDeviceName("")}
+                        className="h-7 px-2 text-[10px] text-red-500 hover:bg-red-50 dark:hover:bg-red-950/20 rounded-md transition-colors cursor-pointer"
+                      >
+                        Putuskan
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col gap-2.5 text-center py-2">
+                      <p className="text-[10px] text-zinc-550">Belum ada printer bluetooth yang terhubung.</p>
+                      <Button
+                        type="button"
+                        onClick={() => setIsBluetoothModalOpen(true)}
+                        className="h-8.5 text-[10px] font-semibold bg-zinc-900 hover:bg-zinc-800 dark:bg-zinc-100 dark:hover:bg-zinc-200 text-white dark:text-zinc-900 rounded-lg transition-all cursor-pointer w-full"
+                      >
+                        Pasangkan Printer Bluetooth
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Uji Coba Printer Button */}
+              <div className="pt-3.5 border-t border-zinc-100 dark:border-zinc-900 mt-2">
+                <Button
+                  type="button"
+                  onClick={handleBrowserTestPrint}
+                  className="w-full h-10 text-xs font-semibold bg-zinc-900 hover:bg-zinc-800 dark:bg-zinc-100 dark:hover:bg-zinc-200 text-white dark:text-zinc-900 rounded-xl transition-all cursor-pointer flex items-center justify-center gap-2 shadow-sm"
+                >
+                  <Printer className="w-4 h-4" />
+                  Uji Coba Printer (Test Print)
+                </Button>
+              </div>
+
             </CardContent>
           </Card>
 
@@ -713,6 +1136,89 @@ $$ language plpgsql;`;
             ) : "Simpan Perubahan Settings"}
           </Button>
         </div>
+
+        {/* Dialog Kustom Penyandingan Bluetooth */}
+        <Dialog open={isBluetoothModalOpen} onOpenChange={setIsBluetoothModalOpen}>
+          <DialogContent className="max-w-md bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100 rounded-2xl p-6 shadow-2xl flex flex-col gap-5">
+            <DialogHeader className="flex flex-col gap-2">
+              <div className="flex items-center gap-2">
+                <div className="w-10 h-10 rounded-xl bg-zinc-100 dark:bg-zinc-900 flex items-center justify-center text-zinc-800 dark:text-zinc-200 shrink-0">
+                  <Printer className="w-5 h-5" />
+                </div>
+                <div>
+                  <DialogTitle className="text-base font-bold tracking-tight">Koneksi Printer Wireless</DialogTitle>
+                  <DialogDescription className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
+                    Ikuti langkah berikut untuk menyandingkan printer Bluetooth.
+                  </DialogDescription>
+                </div>
+              </div>
+            </DialogHeader>
+
+            <div className="flex flex-col gap-4">
+              {/* Visual Step-by-Step */}
+              <div className="flex flex-col gap-3 p-4 bg-zinc-50 dark:bg-zinc-900/50 rounded-xl ring-1 ring-zinc-200/50 dark:ring-zinc-800/40">
+                <div className="flex gap-3">
+                  <div className="w-5 h-5 rounded-full bg-zinc-200 dark:bg-zinc-800 text-[10px] font-bold flex items-center justify-center shrink-0 mt-0.5">1</div>
+                  <p className="text-xs text-zinc-650 dark:text-zinc-350 leading-relaxed">
+                    Klik tombol <strong>"Pindai & Sandingkan"</strong> di bawah untuk memicu pencarian Bluetooth browser.
+                  </p>
+                </div>
+                <div className="flex gap-3">
+                  <div className="w-5 h-5 rounded-full bg-zinc-200 dark:bg-zinc-800 text-[10px] font-bold flex items-center justify-center shrink-0 mt-0.5">2</div>
+                  <p className="text-xs text-zinc-650 dark:text-zinc-350 leading-relaxed">
+                    Pilih perangkat printer Bluetooth Anda dari jendela popup browser native yang muncul di bagian atas layar.
+                  </p>
+                </div>
+                <div className="flex gap-3">
+                  <div className="w-5 h-5 rounded-full bg-zinc-200 dark:bg-zinc-800 text-[10px] font-bold flex items-center justify-center shrink-0 mt-0.5">3</div>
+                  <p className="text-xs text-zinc-650 dark:text-zinc-350 leading-relaxed">
+                    Klik tombol <strong>"Sandingkan" (Pair)</strong> pada popup tersebut untuk menyelesaikan proses otorisasi.
+                  </p>
+                </div>
+              </div>
+
+              {/* Browser security notice */}
+              <div className="flex gap-2.5 p-3.5 bg-blue-500/5 border border-blue-500/20 dark:border-blue-500/10 rounded-xl">
+                <Info className="w-4 h-4 text-blue-500 shrink-0 mt-0.5" />
+                <p className="text-[10px] text-zinc-500 dark:text-zinc-400 leading-normal">
+                  <strong>Catatan Keamanan:</strong> Jendela daftar perangkat keras wajib dikelola langsung oleh sistem browser (seperti pada screenshot Anda) untuk mencegah situs web menghubungkan hardware tanpa izin eksplisit.
+                </p>
+              </div>
+
+              {/* Scanning radar indicator when pairing */}
+              {isPairingBluetooth && (
+                <div className="flex flex-col items-center justify-center gap-3 py-4 border border-dashed border-zinc-250 dark:border-zinc-800 rounded-xl animate-pulse">
+                  <div className="relative flex items-center justify-center">
+                    <div className="absolute w-12 h-12 rounded-full bg-zinc-900/5 dark:bg-white/5 animate-ping" />
+                    <div className="w-8 h-8 rounded-full bg-zinc-900 dark:bg-zinc-100 flex items-center justify-center text-white dark:text-zinc-900">
+                      <RefreshCw className="w-4 h-4 animate-spin" />
+                    </div>
+                  </div>
+                  <span className="text-[10px] font-semibold text-zinc-500 dark:text-zinc-400 animate-pulse">Membuka jendela browser native untuk mencari printer bluetooth...</span>
+                </div>
+              )}
+            </div>
+
+            <DialogFooter className="flex flex-row gap-2.5 mt-2 w-full justify-between items-center bg-transparent border-t-0 p-0">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setIsBluetoothModalOpen(false)}
+                className="flex-1 h-10 text-xs font-semibold rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 text-zinc-650 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-900 cursor-pointer"
+              >
+                Batal
+              </Button>
+              <Button
+                type="button"
+                onClick={handlePairBluetooth}
+                disabled={isPairingBluetooth}
+                className="flex-1 h-10 text-xs font-semibold text-white dark:text-zinc-900 bg-zinc-900 hover:bg-zinc-800 dark:bg-zinc-100 dark:hover:bg-zinc-200 rounded-xl shadow-none cursor-pointer"
+              >
+                {isPairingBluetooth ? "Menghubungkan..." : "Pindai & Sandingkan"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
       </form>
     </div>

@@ -28,6 +28,7 @@ interface PhotoStripProgressCardProps {
   placedStickers?: PlacedSticker[];
   onRemoveSticker?: (id: string) => void;
   onUpdateSticker?: (id: string, updates: Partial<PlacedSticker>) => void;
+  customization?: any;
 }
 
 const InteractiveSticker = ({
@@ -162,7 +163,7 @@ const InteractiveSticker = ({
         ) : (
           <img
             src={asset.imageUrl}
-            alt={asset.name}
+            alt="Stiker"
             className="w-full h-auto drop-shadow-md pointer-events-none block"
             draggable={false}
           />
@@ -192,7 +193,6 @@ const InteractiveSticker = ({
   );
 };
 
-// ... sisa komponen PhotoStripProgressCard tidak berubah ...
 export default function PhotoStripProgressCard({
   containerRef,
   capturedPhotos,
@@ -217,9 +217,41 @@ export default function PhotoStripProgressCard({
   placedStickers = [],
   onRemoveSticker,
   onUpdateSticker,
+  customization,
 }: PhotoStripProgressCardProps) {
   const allDone = filledPhotosCount === layoutsCount && !isCapturing;
   const remaining = layoutsCount - filledPhotosCount;
+  const cardStyle = customization?.cardStyle;
+
+  const getActionButtonClasses = (style?: string) => {
+    switch (style) {
+      case "neobrutalist":
+        return "group w-full flex items-center justify-center gap-2 bg-[#ea580c] hover:bg-[#d94f05] active:translate-x-[2px] active:translate-y-[2px] active:shadow-none text-white border-4 border-black dark:border-white font-black text-sm py-3 rounded-none cursor-pointer transition-all shadow-[4px_4px_0px_0px_#000000] uppercase";
+      case "glass":
+        return "group w-full flex items-center justify-center gap-2 bg-white/20 hover:bg-white/30 border border-white/20 active:scale-[0.98] text-white font-extrabold text-sm py-3.5 rounded-2xl cursor-pointer transition-all duration-200 shadow-lg shadow-white/5 uppercase";
+      case "frameless":
+        return "group w-full flex items-center justify-center gap-2 bg-transparent hover:bg-zinc-900 hover:text-white dark:hover:bg-white dark:hover:text-black active:scale-[0.98] text-zinc-900 dark:text-zinc-100 border border-zinc-800 dark:border-zinc-200 font-bold text-sm py-3.5 rounded-xl cursor-pointer transition-all duration-200 uppercase";
+      case "classic":
+      default:
+        return "group w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-500 active:scale-[0.98] text-white font-semibold text-sm py-3.5 rounded-2xl cursor-pointer transition-all duration-200 shadow-lg shadow-blue-500/25";
+    }
+  };
+
+  if (customization?.hideCompiledStrip) {
+    return (
+      <div className="w-full h-full flex flex-col items-center justify-center p-6 text-center gap-3 bg-zinc-950/40 border-2 border-dashed border-zinc-800/80 rounded-2xl">
+        <div className="w-12 h-12 rounded-full bg-zinc-900 flex items-center justify-center text-zinc-555">
+          <RefreshCw className="w-6 h-6" />
+        </div>
+        <div className="space-y-1">
+          <h3 className="text-sm font-bold text-zinc-300">Hasil Strip Foto Dinonaktifkan</h3>
+          <p className="text-xs text-zinc-500 max-w-[180px] leading-relaxed mx-auto">
+            Aktifkan widget ini di sidebar untuk menampilkan preview cetak strip foto.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="w-full h-full flex flex-col items-center justify-center gap-3 transition-all relative overflow-hidden">
@@ -358,7 +390,7 @@ export default function PhotoStripProgressCard({
         <div className="w-full flex justify-center min-h-[52px] items-center shrink-0">
           <button
             onClick={onComplete}
-            className="group w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-500 active:scale-[0.98] text-white font-semibold text-sm py-3.5 rounded-2xl cursor-pointer transition-all duration-200 shadow-lg shadow-blue-500/25"
+            className={getActionButtonClasses(cardStyle)}
           >
             <span>Lihat Hasil</span>
             <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform duration-200" />

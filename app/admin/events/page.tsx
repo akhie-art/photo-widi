@@ -1,13 +1,12 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Plus, Search, Loader2, Calendar } from "lucide-react";
+import { Plus, Search, Loader2, Calendar, ExternalLink, Copy, Check } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import ConfirmDeleteDialog from "@/components/ui/ConfirmDeleteDialog";
 
-import { usePhotoboothStore } from "../../hooks/usePhotoboothStore";
 import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
 
@@ -21,7 +20,8 @@ const sqlInitializationScript = `-- ── TABLE MANAGEMEN EVENT SQL INITIALIZAT
 -- Salin skrip di bawah ini lalu jalankan di Supabase SQL Editor Anda
 
 create table if not exists events (
-  id          text primary key,
+  id          uuid primary key default gen_random_uuid(),
+  slug        text unique not null,
   name        text not null,
   date        text,
   location    text,
@@ -32,6 +32,9 @@ create table if not exists events (
   allowed_presets text[] default '{}',
   allowed_filters text[] default '{}',
   allowed_stickers text[] default '{}',
+  bg_theme    text default 'sunset',
+  show_payment boolean default true,
+  show_setup  boolean default true,
   created_at  timestamptz default now(),
   updated_at  timestamptz default now()
 );
@@ -54,9 +57,13 @@ create policy "public delete events" on events for delete using (true);
 alter table photo_strips add column if not exists event_name text;
 
 -- Pastikan kolom baru ditambahkan jika tabel events sudah ada sebelumnya
+alter table events add column if not exists slug text unique;
 alter table events add column if not exists allowed_presets text[] default '{}';
 alter table events add column if not exists allowed_filters text[] default '{}';
 alter table events add column if not exists allowed_stickers text[] default '{}';
+alter table events add column if not exists bg_theme text default 'sunset';
+alter table events add column if not exists show_payment boolean default true;
+alter table events add column if not exists show_setup boolean default true;
 
 -- Aktifkan realtime sync untuk tabel events
 do $$
@@ -70,7 +77,6 @@ begin
 end $$;`;
 
 export default function EventsPage() {
-  const { updateConfig } = usePhotoboothStore();
   const [eventsList, setEventsList] = useState<EventItem[]>([]);
   const [photoStripsStats, setPhotoStripsStats] = useState<PhotoStripStat[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -78,6 +84,18 @@ export default function EventsPage() {
   
   const [searchQuery, setSearchQuery] = useState("");
   const [activeTab, setActiveTab] = useState<"all" | "active" | "past">("all");
+  const [copiedLink, setCopiedLink] = useState(false);
+
+  const activeEvent = eventsList.find((e) => e.is_active);
+
+  const handleCopyOperatorLink = () => {
+    if (typeof window === "undefined") return;
+    const link = window.location.origin + (activeEvent ? `/operator/${activeEvent.slug}?step=registrasi` : "/operator?step=event-terjadwal");
+    navigator.clipboard.writeText(link);
+    setCopiedLink(true);
+    toast.success("Link operator berhasil disalin!");
+    setTimeout(() => setCopiedLink(false), 2000);
+  };
 
   // Modal States
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -162,21 +180,25 @@ export default function EventsPage() {
     try {
       const { error: resetError } = await supabase.from("events").update({ is_active: false }).not("id", "eq", event.id);
       if (resetError) throw resetError;
-      const { error: setActiveError } = await supabase.from("events").update({ is_active: true }).eq("id", event.id);
+      const { error: setActiveError = null } = await supabase.from("events").update({ is_active: true }).eq("id", event.id);
       if (setActiveError) throw setActiveError;
 
-      const success = await updateConfig({
-        eventName: event.name, date: event.date, location: event.location,
-        pricePerSession: event.price_per_session, logoUrl: event.logo_url, qrisUrl: event.qris_url,
-        allowedPresets: event.allowed_presets || [], allowedFilters: event.allowed_filters || [], allowedStickers: event.allowed_stickers || [],
-      });
+      toast.success(`Event "${event.name}" diaktifkan!`, { id: loadingToast });
+      fetchEvents();
+    } catch (err: any) {
+      toast.error(`Gagal: ${err.message || err}`, { id: loadingToast });
+    }
+  };
 
-      if (success) {
-        toast.success(`Event "${event.name}" diaktifkan!`, { id: loadingToast });
-        fetchEvents();
-      } else {
-        toast.error("Gagal menyinkronkan pengaturan ke booth.", { id: loadingToast });
-      }
+  // Fungsi baru untuk menonaktifkan event
+  const handleDeactivateEvent = async (event: EventItem) => {
+    const loadingToast = toast.loading(`Menonaktifkan event "${event.name}"...`);
+    try {
+      const { error } = await supabase.from("events").update({ is_active: false }).eq("id", event.id);
+      if (error) throw error;
+
+      toast.success(`Event "${event.name}" dinonaktifkan!`, { id: loadingToast });
+      fetchEvents();
     } catch (err: any) {
       toast.error(`Gagal: ${err.message || err}`, { id: loadingToast });
     }
@@ -184,43 +206,42 @@ export default function EventsPage() {
 
   const handleSaveEvent = async (formData: Omit<EventItem, "is_active" | "created_at">) => {
     setIsSaving(true);
-    const slugId = formData.id;
+    const slugVal = formData.slug;
+    const dbId = formData.id;
 
-    if (formMode === "add" && eventsList.some(ev => ev.id === slugId)) {
-      toast.error(`ID Event "${slugId}" sudah digunakan.`);
+    if (formMode === "add" && eventsList.some(ev => ev.slug === slugVal)) {
+      toast.error(`ID Event "${slugVal}" sudah digunakan.`);
       setIsSaving(false);
       return;
     }
 
     try {
       let uploadedLogoUrl = formData.logo_url;
-      if (uploadedLogoUrl && uploadedLogoUrl.startsWith("data:")) uploadedLogoUrl = await uploadEventAsset(uploadedLogoUrl, "logo", slugId);
+      if (uploadedLogoUrl && uploadedLogoUrl.startsWith("data:")) uploadedLogoUrl = await uploadEventAsset(uploadedLogoUrl, "logo", slugVal);
       
       let uploadedQrisUrl = formData.qris_url;
-      if (uploadedQrisUrl && uploadedQrisUrl.startsWith("data:")) uploadedQrisUrl = await uploadEventAsset(uploadedQrisUrl, "qris", slugId);
+      if (uploadedQrisUrl && uploadedQrisUrl.startsWith("data:")) uploadedQrisUrl = await uploadEventAsset(uploadedQrisUrl, "qris", slugVal);
 
       const payload = {
+        slug: slugVal,
         name: formData.name, date: formData.date, location: formData.location, price_per_session: formData.price_per_session,
         logo_url: uploadedLogoUrl, qris_url: uploadedQrisUrl,
         allowed_presets: formData.allowed_presets, allowed_filters: formData.allowed_filters, allowed_stickers: formData.allowed_stickers,
+        bg_theme: formData.bg_theme || "sunset",
+        show_payment: formData.show_payment !== false,
+        show_setup: formData.show_setup !== false,
+        ui_template_id: formData.ui_template_id || null,
         updated_at: new Date().toISOString(),
       };
 
       if (formMode === "add") {
-        const { error } = await supabase.from("events").insert({ id: slugId, ...payload, is_active: false });
+        const { error } = await supabase.from("events").insert({ ...payload, is_active: false });
         if (error) throw error;
         toast.success(`Event "${formData.name}" berhasil ditambahkan!`);
       } else {
-        const { error } = await supabase.from("events").update(payload).eq("id", slugId);
+        const { error } = await supabase.from("events").update(payload).eq("id", dbId);
         if (error) throw error;
         
-        const currentActive = eventsList.find(ev => ev.id === slugId && ev.is_active);
-        if (currentActive) {
-          await updateConfig({
-            eventName: formData.name, date: formData.date, location: formData.location, pricePerSession: formData.price_per_session,
-            logoUrl: uploadedLogoUrl, qrisUrl: uploadedQrisUrl, allowedPresets: formData.allowed_presets, allowedFilters: formData.allowed_filters, allowedStickers: formData.allowed_stickers,
-          });
-        }
         toast.success(`Perubahan Event "${formData.name}" disimpan!`);
       }
 
@@ -239,7 +260,7 @@ export default function EventsPage() {
     try {
       const { data } = await supabase.storage.from("event-assets").list("");
       if (data) {
-        const filesToDelete = data.filter(f => f.name.includes(`_${eventToDelete.id}_`)).map(f => f.name);
+        const filesToDelete = data.filter(f => f.name.includes(`_${eventToDelete.slug}_`)).map(f => f.name);
         if (filesToDelete.length > 0) await supabase.storage.from("event-assets").remove(filesToDelete);
       }
       const { error } = await supabase.from("events").delete().eq("id", eventToDelete.id);
@@ -254,11 +275,10 @@ export default function EventsPage() {
     }
   };
 
-  const activeEvent = eventsList.find(ev => ev.is_active);
   const activeStats = photoStripsStats.find(s => s.event_name === activeEvent?.name) || { event_name: "", count: 0, amount: 0 };
 
   const filteredEvents = eventsList.filter((event) => {
-    const matchesSearch = event.name.toLowerCase().includes(searchQuery.toLowerCase()) || event.id.toLowerCase().includes(searchQuery.toLowerCase()) || event.location.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesSearch = event.name.toLowerCase().includes(searchQuery.toLowerCase()) || event.slug.toLowerCase().includes(searchQuery.toLowerCase()) || event.location.toLowerCase().includes(searchQuery.toLowerCase());
     if (activeTab === "active") return event.is_active && matchesSearch;
     if (activeTab === "past") {
       if (!event.date) return false;
@@ -279,9 +299,29 @@ export default function EventsPage() {
           <h2 className="text-xl font-semibold text-zinc-900 dark:text-zinc-100 tracking-tight">Manajemen Event</h2>
           <p className="text-sm text-zinc-500 dark:text-zinc-400">Buat, aktifkan, dan kelola profil event khusus untuk operator booth Anda.</p>
         </div>
-        <Button onClick={() => { setSelectedEvent(null); setFormMode("add"); setIsFormOpen(true); }} className="h-10 text-sm font-semibold px-4.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 dark:bg-zinc-100 dark:hover:bg-zinc-200 text-white dark:text-zinc-900 transition-colors flex items-center gap-2 cursor-pointer border-none">
-          <Plus className="w-4 h-4" /> Tambah Event Baru
-        </Button>
+        <div className="flex items-center gap-3 flex-wrap w-full sm:w-auto">
+          <div className="flex items-center gap-2 w-full sm:w-auto">
+            <Button 
+              onClick={() => window.open(activeEvent ? `/operator/${activeEvent.slug}?step=registrasi` : "/operator?step=event-terjadwal", "_blank")} 
+              variant="outline" 
+              className="h-10 text-sm font-semibold px-4 rounded-xl border-zinc-200 dark:border-zinc-800 text-zinc-700 dark:text-zinc-350 hover:bg-zinc-50 dark:hover:bg-zinc-900 cursor-pointer shadow-sm flex-1 sm:flex-initial flex items-center justify-center gap-1.5"
+            >
+              <ExternalLink className="w-4 h-4" /> Kunjungi Operator
+            </Button>
+            <Button
+              type="button"
+              onClick={handleCopyOperatorLink}
+              variant="outline"
+              className="h-10 w-10 p-0 rounded-xl border-zinc-200 dark:border-zinc-800 text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100 dark:hover:text-zinc-100 dark:hover:bg-zinc-800 cursor-pointer transition-colors flex items-center justify-center shadow-sm shrink-0"
+              title="Salin Link Operator"
+            >
+              {copiedLink ? <Check className="w-4 h-4 text-emerald-500" /> : <Copy className="w-4 h-4" />}
+            </Button>
+          </div>
+          <Button onClick={() => { setSelectedEvent(null); setFormMode("add"); setIsFormOpen(true); }} className="h-10 text-sm font-semibold px-4.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 dark:bg-zinc-100 dark:hover:bg-zinc-200 text-white dark:text-zinc-900 transition-colors flex items-center gap-2 cursor-pointer border-none w-full sm:w-auto justify-center">
+            <Plus className="w-4 h-4" /> Tambah Event Baru
+          </Button>
+        </div>
       </div>
 
       <EventStats eventsList={eventsList} activeEvent={activeEvent} activeStats={activeStats} />
@@ -317,6 +357,7 @@ export default function EventsPage() {
               event={event} 
               stats={photoStripsStats.find(s => s.event_name === event.name) || { event_name: "", count: 0, amount: 0 }}
               onActivate={handleActivateEvent}
+              onDeactivate={handleDeactivateEvent}
               onEdit={(ev) => { setSelectedEvent(ev); setFormMode("edit"); setIsFormOpen(true); }}
               onDelete={(ev) => { setEventToDelete(ev); setIsDeleteOpen(true); }}
             />

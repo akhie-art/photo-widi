@@ -10,9 +10,9 @@ export default async function manifest(): Promise<MetadataRoute.Manifest> {
 
   try {
     const { data: cfgRow } = await supabase
-      .from("event_config")
+      .from("booth_config")
       .select("config_json")
-      .eq("id", "default")
+      .eq("id", "00000000-0000-0000-0000-000000000000")
       .single();
 
     if (cfgRow?.config_json) {

@@ -3,15 +3,10 @@
 import { useState } from "react";
 import { Image as ImageIcon, Download, Trash2, Calendar, User, Eye, Phone } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { PhotoStrip } from "../../hooks/usePhotoboothStore";
+import { PhotoStrip } from "../../../hooks/usePhotoboothStore";
 import ConfirmDeleteDialog from "@/components/ui/ConfirmDeleteDialog";
 import { toast } from "sonner";
-
-interface GalleryTabProps {
-  photos: PhotoStrip[];
-  clearPhotos: () => void;
-  deletePhoto: (id: string) => void;
-}
+import { GalleryTabProps } from "../types";
 
 export default function GalleryTab({
   photos,

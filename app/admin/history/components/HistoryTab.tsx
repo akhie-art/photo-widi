@@ -5,16 +5,10 @@ import { Search, Download, Trash2, Calendar, User, BadgeAlert, History, Eye, Wal
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { PhotoStrip, EventConfig } from "../../hooks/usePhotoboothStore";
+import { PhotoStrip, EventConfig } from "../../../hooks/usePhotoboothStore";
 import ConfirmDeleteDialog from "@/components/ui/ConfirmDeleteDialog";
 import { toast } from "sonner";
-
-interface HistoryTabProps {
-  photos: PhotoStrip[];
-  config: EventConfig;
-  clearPhotos: () => void;
-  deletePhoto: (id: string) => void;
-}
+import { HistoryTabProps } from "../types";
 
 export default function HistoryTab({
   photos,

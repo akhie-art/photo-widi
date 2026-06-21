@@ -2,25 +2,10 @@
 
 import React, { useState } from "react";
 import { Sparkles, Filter, Smile } from "lucide-react";
-import {
-  EventConfig, FilterAsset, StickerAsset, PresetTemplate
-} from "../../../hooks/usePhotoboothStore";
-
 import PresetsTab from "./PresetsTab";
 import FiltersTab from "./FiltersTab";
 import StickersTab from "./StickersTab";
-
-export interface FramesTabProps {
-  config: EventConfig;
-  addFilterAsset: (filter: Omit<FilterAsset, "id">) => void;
-  deleteFilterAsset: (id: string) => void;
-  addStickerAsset: (sticker: Omit<StickerAsset, "id">) => Promise<boolean>;
-  deleteStickerAsset: (id: string) => void;
-  addPresetTemplate: (preset: Omit<PresetTemplate, "id">) => Promise<boolean>;
-  updatePresetTemplate: (id: string, fields: Partial<PresetTemplate>) => Promise<boolean>;
-  deletePresetTemplate: (id: string) => void;
-  setActivePresetTemplate: (id: string) => void;
-}
+import { FramesTabProps } from "../types";
 
 export default function FramesTab(props: FramesTabProps) {
   const [activeTab, setActiveTab] = useState<"presets" | "filters" | "stickers">("presets");

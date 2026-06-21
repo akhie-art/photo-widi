@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { EventConfig, PresetTemplate, SlotConfig } from "../../../hooks/usePhotoboothStore";
 import ConfirmDeleteDialog from "@/components/ui/ConfirmDeleteDialog";
-import SlotLayoutEditor, { generateDefaultSlots } from "../../components/SlotLayoutEditor";
+import SlotLayoutEditor, { generateDefaultSlots } from "./SlotLayoutEditor";
 import StripPreview from "./StripPreview";
 
 interface PresetsTabProps {
@@ -79,7 +79,7 @@ export default function PresetsTab({ config, addPresetTemplate, updatePresetTemp
   };
 
   const openEditPreset = (preset: PresetTemplate) => {
-    setPresetEditingId(preset.id); setPresetFormName(preset.name); setPresetFormOverlay(preset.imageOverlay);
+    setPresetEditingId(preset.id); setPresetFormName(preset.name || ""); setPresetFormOverlay(preset.imageOverlay);
     setPresetFormSlots(preset.customSlots ?? generateDefaultSlots(4));
     setPresetFormPaperSize(preset.paperSize || "2R");
     setPresetFormOverlayX(preset.overlayX ?? 0); setPresetFormOverlayY(preset.overlayY ?? 0);
@@ -95,7 +95,7 @@ export default function PresetsTab({ config, addPresetTemplate, updatePresetTemp
     e.preventDefault();
     if (isSaving) return;
 
-    let nameToSubmit = presetFormName.trim();
+    let nameToSubmit = (presetFormName || "").trim();
     if (!presetEditingId) {
       const activeNumber = (config.presetTemplates?.length ?? 0) + 1;
       nameToSubmit = `Template ${presetFormPaperSize} #${activeNumber}`;

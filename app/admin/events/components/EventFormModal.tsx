@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { X, Calendar, MapPin, Loader2, ImagePlus, Hash, Coins, Tag, ImageIcon, Sparkles } from "lucide-react";
+import { X, Calendar, MapPin, Loader2, ImagePlus, Hash, Coins, Tag, ImageIcon, Sparkles, Palette } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
@@ -24,8 +24,7 @@ const slugify = (text: string) => {
 };
 
 export default function EventFormModal({ isOpen, mode, initialData, isSaving, onClose, onSave }: EventFormModalProps) {
-  const { config } = usePhotoboothStore();
-  
+  const [dbId, setDbId] = useState("");
   const [eventId, setEventId] = useState("");
   const [eventName, setEventName] = useState("");
   const [eventDate, setEventDate] = useState("");
@@ -33,6 +32,11 @@ export default function EventFormModal({ isOpen, mode, initialData, isSaving, on
   const [pricePerSession, setPricePerSession] = useState(25000);
   const [logoUrl, setLogoUrl] = useState("");
   const [qrisUrl, setQrisUrl] = useState("");
+  const [bgTheme, setBgTheme] = useState("sunset");
+  const [showPayment, setShowPayment] = useState(true);
+  const [showSetup, setShowSetup] = useState(true);
+  const [uiTemplateId, setUiTemplateId] = useState("");
+  const { config, uiTemplates = [] } = usePhotoboothStore();
 
   const [allowedPresets, setAllowedPresets] = useState<string[]>([]);
   const [allowedFilters, setAllowedFilters] = useState<string[]>([]);
@@ -44,17 +48,23 @@ export default function EventFormModal({ isOpen, mode, initialData, isSaving, on
   useEffect(() => {
     if (isOpen) {
       if (mode === "edit" && initialData) {
-        setEventId(initialData.id);
+        setDbId(initialData.id);
+        setEventId(initialData.slug);
         setEventName(initialData.name);
         setEventDate(initialData.date || "");
         setEventLocation(initialData.location || "");
         setPricePerSession(initialData.price_per_session);
         setLogoUrl(initialData.logo_url || "");
         setQrisUrl(initialData.qris_url || "");
+        setBgTheme(initialData.bg_theme || "sunset");
+        setShowPayment(initialData.show_payment !== false);
+        setShowSetup(initialData.show_setup !== false);
+        setUiTemplateId(initialData.ui_template_id || "");
         setAllowedPresets(initialData.allowed_presets || []);
         setAllowedFilters(initialData.allowed_filters || []);
         setAllowedStickers(initialData.allowed_stickers || []);
       } else {
+        setDbId("");
         setEventId("");
         setEventName("");
         setEventDate("");
@@ -62,6 +72,10 @@ export default function EventFormModal({ isOpen, mode, initialData, isSaving, on
         setPricePerSession(25000);
         setLogoUrl("");
         setQrisUrl("");
+        setBgTheme("sunset");
+        setShowPayment(true);
+        setShowSetup(true);
+        setUiTemplateId("");
         setAllowedPresets([]);
         setAllowedFilters([]);
         setAllowedStickers([]);
@@ -108,7 +122,8 @@ export default function EventFormModal({ isOpen, mode, initialData, isSaving, on
     }
     
     onSave({
-      id: eventId,
+      id: dbId,
+      slug: eventId,
       name: eventName,
       date: eventDate,
       location: eventLocation,
@@ -118,7 +133,11 @@ export default function EventFormModal({ isOpen, mode, initialData, isSaving, on
       allowed_presets: allowedPresets,
       allowed_filters: allowedFilters,
       allowed_stickers: allowedStickers,
-    });
+      bg_theme: bgTheme,
+      show_payment: showPayment,
+      show_setup: showSetup,
+      ui_template_id: uiTemplateId || null,
+    } as any);
   };
 
   const handleSelectAllModalAssets = () => {
@@ -191,7 +210,7 @@ export default function EventFormModal({ isOpen, mode, initialData, isSaving, on
 
     if (modalTab === "stickers") {
       const list = (config.customStickers || []).filter(s => 
-        (s.name || "").toLowerCase().includes(modalSearch.toLowerCase()) || 
+        (s.imageUrl || "").toLowerCase().includes(modalSearch.toLowerCase()) || 
         (s.id || "").toLowerCase().includes(modalSearch.toLowerCase())
       );
       
@@ -210,7 +229,6 @@ export default function EventFormModal({ isOpen, mode, initialData, isSaving, on
               {isImg ? <img src={sticker.imageUrl} alt="" className="z-10 max-w-full max-h-full object-contain" /> : <span className="z-10 text-3xl select-none">{sticker.imageUrl || "✨"}</span>}
             </div>
             <div className="w-full text-center min-w-0">
-              <p className="font-semibold text-xs text-zinc-800 dark:text-zinc-200 truncate px-1">{sticker.name}</p>
               <span className="inline-block mt-1 px-2 py-0.5 rounded-full bg-zinc-100 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400 font-mono text-[10px] uppercase font-medium">{isImg ? "PNG Image" : "Emoji"}</span>
             </div>
           </label>
@@ -283,6 +301,86 @@ export default function EventFormModal({ isOpen, mode, initialData, isSaving, on
                   <MapPin className="absolute left-3 w-4 h-4 text-zinc-400 pointer-events-none" />
                   <Input type="text" value={eventLocation} onChange={(e) => setEventLocation(e.target.value)} placeholder="contoh: Ballroom Hotel Mulia, Jakarta" className="pl-10 h-10 rounded-xl bg-white dark:bg-zinc-950 border-none ring-1 ring-inset ring-zinc-200 dark:ring-zinc-800 focus-visible:ring-2 focus-visible:ring-blue-500/50 text-sm font-sans" />
                 </div>
+              </div>
+
+              <div className="flex flex-col gap-2">
+                <Label className="text-zinc-700 dark:text-zinc-300 font-semibold text-xs">Template UI/UX Custom (Opsional)</Label>
+                <div className="relative flex items-center">
+                  <Palette className="absolute left-3 w-4 h-4 text-zinc-400 pointer-events-none" />
+                  <select
+                    value={uiTemplateId}
+                    onChange={(e) => setUiTemplateId(e.target.value)}
+                    className="pl-10 pr-10 h-10 w-full rounded-xl bg-white dark:bg-zinc-950 border-none ring-1 ring-inset ring-zinc-200 dark:ring-zinc-800 focus-visible:ring-2 focus-visible:ring-blue-500/50 text-sm font-sans cursor-pointer outline-none appearance-none font-medium text-zinc-800 dark:text-zinc-250"
+                  >
+                    <option value="">-- Gunakan Pengaturan Manual Di Bawah --</option>
+                    {uiTemplates.map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.name}
+                      </option>
+                    ))}
+                  </select>
+                  <div className="absolute right-3.5 pointer-events-none text-zinc-400 text-[10px]">
+                    ▼
+                  </div>
+                </div>
+                {uiTemplateId && (
+                  <p className="text-[9px] text-amber-500 font-medium leading-normal -mt-0.5">
+                    * Catatan: Karena Anda memilih template, pengaturan warna tema, alur, logo, dan QRIS di bawah ini otomatis diabaikan dan mengikuti template tersebut.
+                  </p>
+                )}
+              </div>
+
+              <div className="flex flex-col gap-2">
+                <Label className="text-zinc-700 dark:text-zinc-300 font-semibold text-xs">Tema Halaman Operator</Label>
+                <div className="relative flex items-center">
+                  <Sparkles className="absolute left-3 w-4 h-4 text-zinc-400 pointer-events-none" />
+                  <select
+                    value={bgTheme}
+                    onChange={(e) => setBgTheme(e.target.value)}
+                    className="pl-10 pr-10 h-10 w-full rounded-xl bg-white dark:bg-zinc-950 border-none ring-1 ring-inset ring-zinc-200 dark:ring-zinc-800 focus-visible:ring-2 focus-visible:ring-blue-500/50 text-sm font-sans cursor-pointer outline-none appearance-none"
+                  >
+                    <option value="sunset">Sunset Warm (Orange / Pink)</option>
+                    <option value="neon">Cyberpunk Neon (Magenta / Cyan)</option>
+                    <option value="luxury">Luxury Gold (Gold / Amber)</option>
+                    <option value="romantic">Romantic Rose (Red / Pink)</option>
+                    <option value="emerald">Fresh Emerald (Teal / Green)</option>
+                  </select>
+                  <div className="absolute right-3.5 pointer-events-none text-zinc-400 text-[10px]">
+                    ▼
+                  </div>
+                </div>
+              </div>
+
+              <div className="pb-2 border-b border-zinc-100 dark:border-zinc-800 mt-2">
+                <h3 className="text-sm font-bold text-zinc-800 dark:text-zinc-200">Alur Layanan / Halaman</h3>
+              </div>
+
+              <div className="flex flex-col gap-3 mt-1.5 bg-zinc-50/50 dark:bg-zinc-900/10 border border-zinc-150 dark:border-zinc-800/80 p-4 rounded-xl">
+                <label className="flex items-start gap-3 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={showPayment}
+                    onChange={(e) => setShowPayment(e.target.checked)}
+                    className="rounded border-zinc-300 dark:border-zinc-700 text-blue-600 focus:ring-blue-500 w-4 h-4 cursor-pointer mt-0.5"
+                  />
+                  <div className="flex flex-col">
+                    <span className="text-xs font-semibold text-zinc-800 dark:text-zinc-200">Tampilkan Halaman Pembayaran</span>
+                    <span className="text-[10px] text-zinc-450 dark:text-zinc-500 mt-0.5 leading-relaxed">Tampilkan QRIS / Tunai sebelum memotret. Nonaktifkan jika event gratis / prepaid.</span>
+                  </div>
+                </label>
+
+                <label className="flex items-start gap-3 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={showSetup}
+                    onChange={(e) => setShowSetup(e.target.checked)}
+                    className="rounded border-zinc-300 dark:border-zinc-700 text-blue-600 focus:ring-blue-500 w-4 h-4 cursor-pointer mt-0.5"
+                  />
+                  <div className="flex flex-col">
+                    <span className="text-xs font-semibold text-zinc-800 dark:text-zinc-200">Tampilkan Halaman Pengaturan (Setup)</span>
+                    <span className="text-[10px] text-zinc-450 dark:text-zinc-500 mt-0.5 leading-relaxed">Berikan opsi memilih layout bingkai & filter sebelum mengaktifkan kamera.</span>
+                  </div>
+                </label>
               </div>
 
               <div className="pb-2 border-b border-zinc-100 dark:border-zinc-800 mt-2">

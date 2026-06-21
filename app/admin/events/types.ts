@@ -1,5 +1,6 @@
 export interface EventItem {
   id: string;
+  slug: string;
   name: string;
   date: string;
   location: string;
@@ -10,6 +11,10 @@ export interface EventItem {
   allowed_presets?: string[];
   allowed_filters?: string[];
   allowed_stickers?: string[];
+  bg_theme?: string;
+  show_payment?: boolean;
+  show_setup?: boolean;
+  ui_template_id?: string;
   created_at?: string;
 }
 

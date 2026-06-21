@@ -2,7 +2,7 @@
 
 import React, { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import { Plus, Minus, RotateCcw, Trash2, Move, GripVertical, Image as ImageIcon, Square, ZoomIn, ZoomOut, ChevronUp, ChevronDown, Undo2, Redo2, Sidebar } from "lucide-react";
-import { SlotConfig } from "../../hooks/usePhotoboothStore";
+import { SlotConfig } from "../../../hooks/usePhotoboothStore";
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 

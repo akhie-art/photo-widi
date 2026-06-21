@@ -44,6 +44,12 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
+  // Bypass service worker caching for Next.js system/build files and hot-reload endpoints
+  const url = new URL(event.request.url);
+  if (url.pathname.startsWith("/_next/") || url.pathname.includes("webpack-hmr")) {
+    return;
+  }
+
   event.respondWith(
     fetch(event.request)
       .then((response) => {

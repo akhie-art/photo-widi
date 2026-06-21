@@ -4,11 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { EventConfig, PhotoStrip } from "../../hooks/usePhotoboothStore";
 import { Camera, Palette, Clock, Image as ImageIcon, Sparkles, Calendar } from "lucide-react";
 
-interface OverviewTabProps {
-  photos: PhotoStrip[];
-  config: EventConfig;
-}
-
+import { OverviewTabProps } from "../types";
 export default function OverviewTab({
   photos,
   config,
