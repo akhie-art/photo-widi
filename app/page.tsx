@@ -168,7 +168,7 @@ export default function LandingPage() {
         <div className="flex-1 flex flex-col z-10 relative">
           {/* Header */}
           <header className="w-full bg-transparent sticky top-0 z-50">
-            <div className="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between backdrop-blur-sm">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 h-20 flex items-center justify-between backdrop-blur-sm">
               <div className="flex items-center gap-3 cursor-pointer group" onClick={() => router.push("/")}>
                 {config.logoUrl ? (
                   <div className="w-9 h-9 rounded-xl overflow-hidden bg-white dark:bg-zinc-950 flex items-center justify-center border border-slate-200/60 dark:border-slate-800 shrink-0 shadow-sm group-hover:shadow-md transition-all">
@@ -184,18 +184,18 @@ export default function LandingPage() {
                 </span>
               </div>
               
-              <div className="flex items-center gap-4 text-sm text-slate-500 dark:text-slate-400">
+              <div className="flex items-center gap-3 sm:gap-4 text-sm text-slate-500 dark:text-slate-400">
                 {currentOperator ? (
-                  <div className="hidden sm:flex items-center gap-3 border border-emerald-200/50 dark:border-emerald-900/30 px-3 py-1.5 rounded-full text-xs shadow-sm bg-emerald-50/50 dark:bg-emerald-900/10 text-emerald-700 dark:text-emerald-400">
-                    <span className="flex h-2 w-2 relative">
+                  <div className="flex items-center gap-2 sm:gap-3 border border-emerald-200/50 dark:border-emerald-900/30 px-2.5 py-1.5 sm:px-3 sm:py-1.5 rounded-full text-xs shadow-sm bg-emerald-50/50 dark:bg-emerald-900/10 text-emerald-700 dark:text-emerald-400">
+                    <span className="flex h-2 w-2 relative shrink-0">
                       <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                       <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
                     </span>
-                    <span>Operator: <strong className="font-semibold">{currentOperator}</strong></span>
-                    <div className="w-px h-3 bg-emerald-200 dark:bg-emerald-800 mx-1" />
+                    <span className="truncate max-w-[80px] sm:max-w-none"><span className="hidden sm:inline">Operator: </span><strong className="font-semibold">{currentOperator}</strong></span>
+                    <div className="w-px h-3 bg-emerald-200 dark:bg-emerald-800 shrink-0" />
                     <button
                       onClick={handleOperatorLogout}
-                      className="hover:text-red-500 dark:hover:text-red-400 font-medium transition-colors cursor-pointer"
+                      className="hover:text-red-500 dark:hover:text-red-400 font-medium transition-colors cursor-pointer shrink-0"
                     >
                       Keluar
                     </button>
@@ -205,7 +205,7 @@ export default function LandingPage() {
                     variant="outline"
                     size="sm"
                     onClick={() => router.push("/login")}
-                    className="hidden sm:flex h-9 rounded-xl text-xs font-bold border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer shadow-sm"
+                    className="flex h-9 rounded-xl text-xs font-bold border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer shadow-sm"
                   >
                     Masuk Sistem
                   </Button>
