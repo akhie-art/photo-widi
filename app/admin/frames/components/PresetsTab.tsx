@@ -602,7 +602,10 @@ export default function PresetsTab({ config, addPresetTemplate, updatePresetTemp
       {/* DIALOG SECONDARY: IMAGE EDITOR (CROP & CHROMA KEY) */}
       <Dialog open={editorOpen} onOpenChange={open => { if (!open) setEditorOpen(false); }}>
         {/* Perubahan: height constraint menggunakan max-h-[100dvh] dan overflow-hidden */}
-        <DialogContent className="bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 text-zinc-900 dark:text-white !max-w-[900px] w-[95vw] max-h-[100dvh] sm:rounded-2xl p-0 shadow-2xl flex flex-col z-[60] overflow-hidden">
+        <DialogContent 
+          className="bg-white dark:bg-zinc-950 text-zinc-900 dark:text-white w-screen h-[100dvh] !max-w-none !max-h-none !rounded-none border-none p-0 !m-0 sm:w-[95vw] sm:h-fit sm:max-h-[100dvh] sm:rounded-2xl sm:border sm:border-zinc-200 dark:sm:border-zinc-800 sm:shadow-2xl sm:!max-w-[900px] sm:!m-auto overflow-hidden flex flex-col outline-none"
+          style={{ zIndex: 9999 }}
+        >
           <div className="px-5 py-4 border-b border-zinc-200 dark:border-zinc-800 flex items-center justify-between bg-zinc-50 dark:bg-zinc-900/50 shrink-0">
             <div>
               <h3 className="text-base font-semibold">Editor Gambar</h3>
