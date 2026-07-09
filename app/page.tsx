@@ -239,8 +239,8 @@ export default function LandingPage() {
                 Virtual Photobooth Experience
               </div>
 
-              <h1 className="text-5xl md:text-[64px] lg:text-[72px] font-extrabold tracking-tight text-slate-800 dark:text-white leading-[1.05] mt-2">
-                Abadikan Momen <br />
+              <h1 className="text-4xl sm:text-5xl md:text-[64px] lg:text-[72px] font-extrabold tracking-tight text-slate-800 dark:text-white leading-[1.05] mt-2">
+                Abadikan Momen <br className="hidden md:inline" />{" "}
                 <span className="bg-gradient-to-r from-rose-400 via-orange-400 to-amber-400 bg-clip-text text-transparent">Penuh Senyuman.</span>
               </h1>
 
@@ -266,35 +266,35 @@ export default function LandingPage() {
             </div>
 
             {/* Right Illustration Column (Parallax 3D Composition) */}
-            <div className="lg:col-span-6 w-full h-[450px] md:h-[550px] relative flex items-center justify-center order-1 lg:order-2">
+            <div className="lg:col-span-6 w-full h-[320px] sm:h-[400px] md:h-[550px] relative flex items-center justify-center order-1 lg:order-2">
               
-              <div className="relative w-full max-w-sm h-full flex items-center justify-center">
+              <div className="relative w-full max-w-[280px] sm:max-w-sm h-full flex items-center justify-center">
                 
                 {/* Parallax Layer 1: Left Background Strip */}
                 <div 
-                  className="absolute top-[12%] left-[5%] md:-left-[5%] z-20 transition-transform duration-[400ms] ease-out"
+                  className="absolute top-[12%] left-[2%] sm:-left-[5%] z-20 transition-transform duration-[400ms] ease-out"
                   style={{ transform: `translate3d(${mousePos.x * -25}px, ${mousePos.y * -25}px, 0)` }}
                 >
                   <div 
-                    className="w-28 h-40 md:w-32 md:h-48 bg-white/95 dark:bg-slate-800/95 backdrop-blur-xl p-3 rounded-2xl shadow-[0_20px_40px_-15px_rgba(0,0,0,0.1)] border border-white dark:border-slate-700 animate-float"
+                    className="w-20 h-28 sm:w-28 sm:h-40 md:w-32 md:h-48 bg-white/95 dark:bg-slate-800/95 backdrop-blur-xl p-2 sm:p-3 rounded-xl sm:rounded-2xl shadow-[0_20px_40px_-15px_rgba(0,0,0,0.1)] border border-white dark:border-slate-700 animate-float"
                     style={{ '--rotation': '-15deg' } as React.CSSProperties}
                   >
-                    <div className="w-full h-[47%] bg-[#FFE4E1] dark:bg-slate-700 rounded-xl mb-2" />
-                    <div className="w-full h-[47%] bg-[#FFFACD] dark:bg-slate-700 rounded-xl" />
+                    <div className="w-full h-[47%] bg-[#FFE4E1] dark:bg-slate-700 rounded-lg sm:rounded-xl mb-1.5 sm:mb-2" />
+                    <div className="w-full h-[47%] bg-[#FFFACD] dark:bg-slate-700 rounded-lg sm:rounded-xl" />
                   </div>
                 </div>
 
                 {/* Parallax Layer 2: Right Foreground Strip */}
                 <div 
-                  className="absolute bottom-[15%] right-[5%] md:-right-[5%] z-40 transition-transform duration-[300ms] ease-out"
+                  className="absolute bottom-[15%] right-[2%] sm:-right-[5%] z-40 transition-transform duration-[300ms] ease-out"
                   style={{ transform: `translate3d(${mousePos.x * 40}px, ${mousePos.y * 40}px, 0)` }}
                 >
                   <div 
-                    className="w-32 h-44 md:w-36 md:h-52 bg-white/95 dark:bg-slate-800/95 backdrop-blur-xl p-3 rounded-2xl shadow-[0_30px_50px_-15px_rgba(0,0,0,0.15)] border border-white dark:border-slate-700 animate-float-delayed"
+                    className="w-24 h-32 sm:w-32 sm:h-44 md:w-36 md:h-52 bg-white/95 dark:bg-slate-800/95 backdrop-blur-xl p-2 sm:p-3 rounded-xl sm:rounded-2xl shadow-[0_30px_50px_-15px_rgba(0,0,0,0.15)] border border-white dark:border-slate-700 animate-float-delayed"
                     style={{ '--rotation': '18deg' } as React.CSSProperties}
                   >
-                    <div className="w-full h-full bg-[#E0F7FA] dark:bg-slate-700 rounded-xl flex items-center justify-center border border-[#B2EBF2] dark:border-slate-600">
-                      <ImagePlay className="w-8 h-8 text-sky-400/50" />
+                    <div className="w-full h-full bg-[#E0F7FA] dark:bg-slate-700 rounded-lg sm:rounded-xl flex items-center justify-center border border-[#B2EBF2] dark:border-slate-600">
+                      <ImagePlay className="w-6 h-6 sm:w-8 sm:h-8 text-sky-400/50" />
                     </div>
                   </div>
                 </div>
@@ -307,29 +307,29 @@ export default function LandingPage() {
                     transform: `perspective(1000px) rotateX(${mousePos.y * -8}deg) rotateY(${mousePos.x * 8}deg) translate3d(${mousePos.x * 10}px, ${mousePos.y * 10}px, 0)` 
                   }}
                 >
-                  <div className="w-56 h-56 md:w-64 md:h-64 bg-[#FFFDFB] dark:bg-slate-800 rounded-[2.5rem] md:rounded-[3rem] shadow-[0_35px_60px_-15px_rgba(251,113,133,0.15)] dark:shadow-[0_35px_60px_-15px_rgba(0,0,0,0.4)] flex items-center justify-center border-4 border-white dark:border-slate-700/50 relative overflow-hidden">
+                  <div className="w-40 h-40 sm:w-56 sm:h-56 md:w-64 md:h-64 bg-[#FFFDFB] dark:bg-slate-800 rounded-[1.8rem] sm:rounded-[2.5rem] md:rounded-[3rem] shadow-[0_35px_60px_-15px_rgba(251,113,133,0.15)] dark:shadow-[0_35px_60px_-15px_rgba(0,0,0,0.4)] flex items-center justify-center border-[3px] sm:border-4 border-white dark:border-slate-700/50 relative overflow-hidden">
                     
                     {/* Inner subtle glow */}
                     <div className="absolute inset-0 bg-gradient-to-br from-white/50 to-transparent dark:from-white/5 pointer-events-none" />
 
                     {/* REC Indicator */}
-                    <div className="absolute top-5 right-5 flex items-center gap-1.5 bg-slate-50 dark:bg-slate-700 px-3 py-1 rounded-full shadow-sm border border-slate-100 dark:border-slate-600">
-                      <div className="w-2 h-2 rounded-full bg-slate-400 animate-pulse" />
-                      <span className="text-[9px] font-extrabold text-slate-600 dark:text-slate-300 tracking-wider">REC</span>
+                    <div className="absolute top-3 right-3 sm:top-5 sm:right-5 flex items-center gap-1 bg-slate-50 dark:bg-slate-700 px-2 sm:px-3 py-0.5 sm:py-1 rounded-full shadow-sm border border-slate-100 dark:border-slate-600">
+                      <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-slate-400 animate-pulse" />
+                      <span className="text-[8px] sm:text-[9px] font-extrabold text-slate-600 dark:text-slate-300 tracking-wider">REC</span>
                     </div>
 
                     {/* Camera Lens Object */}
-                    <div className="relative w-28 h-28 md:w-32 md:h-32 rounded-full bg-gradient-to-tr from-rose-400 via-orange-400 to-amber-300 flex items-center justify-center shadow-inner">
+                    <div className="relative w-20 h-20 sm:w-28 sm:h-28 md:w-32 md:h-32 rounded-full bg-gradient-to-tr from-rose-400 via-orange-400 to-amber-300 flex items-center justify-center shadow-inner">
                       {/* Lens Reflection */}
                       <div className="absolute inset-0 rounded-full bg-gradient-to-b from-white/30 to-transparent pointer-events-none" />
                       
-                      <div className="w-[70px] h-[70px] md:w-20 md:h-20 rounded-full bg-white/10 flex items-center justify-center border-[3px] border-white/40 backdrop-blur-md shadow-lg">
-                        <Camera className="w-8 h-8 md:w-9 md:h-9 text-white drop-shadow-md" strokeWidth={2.5} />
+                      <div className="w-[50px] h-[50px] sm:w-[70px] sm:h-[70px] md:w-20 md:h-20 rounded-full bg-white/10 flex items-center justify-center border-2 sm:border-[3px] border-white/40 backdrop-blur-md shadow-lg">
+                        <Camera className="w-5 h-5 sm:w-8 sm:h-8 md:w-9 md:h-9 text-white drop-shadow-md" strokeWidth={2.5} />
                       </div>
                     </div>
 
                     {/* Flash indicator / Sensor */}
-                    <div className="absolute bottom-6 left-1/2 -translate-x-1/2 w-8 h-1.5 bg-slate-200 dark:bg-slate-600 rounded-full" />
+                    <div className="absolute bottom-4 sm:bottom-6 left-1/2 -translate-x-1/2 w-6 sm:w-8 h-1 sm:h-1.5 bg-slate-200 dark:bg-slate-600 rounded-full" />
                   </div>
                 </div>
 
@@ -338,14 +338,14 @@ export default function LandingPage() {
                   className="absolute top-[5%] right-[10%] z-50 transition-transform duration-[150ms] ease-out pointer-events-none"
                   style={{ transform: `translate3d(${mousePos.x * 60}px, ${mousePos.y * 60}px, 0)` }}
                 >
-                  <Sparkles className="w-7 h-7 text-amber-400 animate-pulse" strokeWidth={2.5} />
+                  <Sparkles className="w-5 h-5 sm:w-7 sm:h-7 text-amber-400 animate-pulse" strokeWidth={2.5} />
                 </div>
                 
                 <div 
                   className="absolute bottom-[25%] left-[0%] z-50 transition-transform duration-[200ms] ease-out pointer-events-none"
                   style={{ transform: `translate3d(${mousePos.x * -50}px, ${mousePos.y * -50}px, 0)` }}
                 >
-                  <Heart className="w-5 h-5 text-rose-400 opacity-80" strokeWidth={2.5} />
+                  <Heart className="w-4 h-4 sm:w-5 sm:h-5 text-rose-400 opacity-80" strokeWidth={2.5} />
                 </div>
               </div>
             </div>
@@ -397,7 +397,7 @@ export default function LandingPage() {
         </div>
 
         {/* Features / Workflow Section */}
-        <section className="w-full py-24 pt-32 bg-white/95 dark:bg-slate-900/95 border-t border-rose-50 dark:border-slate-800/50 relative z-20 backdrop-blur-xl shadow-[0_-20px_40px_rgba(0,0,0,0.02)]">
+        <section className="w-full py-16 md:py-24 pt-20 md:pt-32 bg-white/95 dark:bg-slate-900/95 border-t border-rose-50 dark:border-slate-800/50 relative z-20 backdrop-blur-xl shadow-[0_-20px_40px_rgba(0,0,0,0.02)]">
           <div className="max-w-7xl mx-auto px-6">
             <div className="mb-16 text-center md:text-left">
               <span className="text-xs font-bold text-rose-400 uppercase tracking-widest block mb-2">Cara Kerja</span>
@@ -426,7 +426,7 @@ export default function LandingPage() {
         </section>
 
         {/* Minimalist Gallery Section */}
-        <section className="w-full py-24 bg-[#FFFBF7] dark:bg-slate-950 relative z-20">
+        <section className="w-full py-16 md:py-24 bg-[#FFFBF7] dark:bg-slate-950 relative z-20">
           <div className="max-w-7xl mx-auto px-6">
             <div className="mb-12 flex flex-col md:flex-row md:items-end justify-between gap-4">
               <div>
@@ -450,7 +450,7 @@ export default function LandingPage() {
                 </div>
               </div>
             ) : (
-              <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-6">
+              <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4 sm:gap-6">
                 {photos.slice(0, 10).map((photo: PhotoStrip, idx: number) => (
                   <div 
                     key={photo.id} 
@@ -521,7 +521,7 @@ export default function LandingPage() {
               </div>
 
               {/* Links & Socials Column */}
-              <div className="md:col-span-7 flex flex-wrap gap-12 md:justify-end">
+              <div className="md:col-span-7 grid grid-cols-2 gap-8 sm:flex sm:flex-wrap sm:gap-12 md:justify-end">
                 <div className="flex flex-col gap-4">
                   <h4 className="font-bold text-slate-800 dark:text-slate-100 text-[15px]">Layanan</h4>
                   <a href="#" className="text-sm font-medium text-slate-500 hover:text-rose-500 transition-colors">Photobooth Event</a>
