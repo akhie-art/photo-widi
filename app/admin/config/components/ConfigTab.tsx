@@ -187,8 +187,25 @@ export default function ConfigTab({ config, updateConfig }: ConfigTabProps) {
         iframeDoc.write(`
           <html>
             <head>
-              <title>Test Print Photo Strip</title>
+              <title></title>
               <style>
+                @page {
+                  margin: 0;
+                  size: auto;
+                }
+                @media print {
+                  @page {
+                    margin: 0;
+                    size: auto;
+                  }
+                  html, body {
+                    margin: 0 !important;
+                    padding: 0 !important;
+                  }
+                  body {
+                    background-color: white;
+                  }
+                }
                 body {
                   margin: 0;
                   display: flex;
@@ -226,15 +243,6 @@ export default function ConfigTab({ config, updateConfig }: ConfigTabProps) {
                   font-size: 14px;
                   font-weight: bold;
                 }
-                @page {
-                  margin: 0;
-                  size: auto;
-                }
-                @media print {
-                  body {
-                    background-color: white;
-                  }
-                }
               </style>
             </head>
             <body>
@@ -249,8 +257,10 @@ export default function ConfigTab({ config, updateConfig }: ConfigTabProps) {
                 <p>Terima Kasih</p>
               </div>
               <script>
-                window.focus();
-                window.print();
+                setTimeout(function() {
+                  window.focus();
+                  window.print();
+                }, 250);
               </script>
             </body>
           </html>

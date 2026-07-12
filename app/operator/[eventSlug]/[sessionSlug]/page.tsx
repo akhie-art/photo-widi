@@ -925,8 +925,33 @@ export default function CustomerBoothSession() {
         iframeDoc.write(`
           <html>
             <head>
-              <title>Print Photo Strip</title>
+              <title></title>
               <style>
+                @page {
+                  margin: 0;
+                  size: ${pageSizeCss};
+                }
+                @media print {
+                  @page {
+                    margin: 0;
+                    size: ${pageSizeCss};
+                  }
+                  html, body {
+                    margin: 0 !important;
+                    padding: 0 !important;
+                    height: 100%;
+                    width: 100%;
+                  }
+                  body {
+                    background-color: white;
+                  }
+                  img {
+                    max-width: 100%;
+                    max-height: 100vh;
+                    display: block;
+                    margin: 0 auto;
+                  }
+                }
                 body {
                   margin: 0;
                   display: flex;
@@ -940,32 +965,23 @@ export default function CustomerBoothSession() {
                   max-height: 100vh;
                   object-fit: contain;
                 }
-                @page {
-                  margin: 0;
-                  size: ${pageSizeCss};
-                }
-                @media print {
-                  body {
-                    background-color: white;
-                  }
-                  img {
-                    max-width: 100%;
-                    max-height: 100vh;
-                  }
-                }
               </style>
             </head>
             <body>
               <img id="print-image" src="${compiledStripUrl}" />
               <script>
                 const img = document.getElementById('print-image');
-                if (img.complete) {
-                  window.focus();
-                  window.print();
-                } else {
-                  img.onload = function() {
+                function triggerPrint() {
+                  setTimeout(function() {
                     window.focus();
                     window.print();
+                  }, 250);
+                }
+                if (img.complete) {
+                  triggerPrint();
+                } else {
+                  img.onload = function() {
+                    triggerPrint();
                   };
                 }
               </script>
@@ -1009,8 +1025,33 @@ export default function CustomerBoothSession() {
         iframeDoc.write(`
           <html>
             <head>
-              <title>Print Photo Strip</title>
+              <title></title>
               <style>
+                @page {
+                  margin: 0;
+                  size: ${pageSizeCss};
+                }
+                @media print {
+                  @page {
+                    margin: 0;
+                    size: ${pageSizeCss};
+                  }
+                  html, body {
+                    margin: 0 !important;
+                    padding: 0 !important;
+                    height: 100%;
+                    width: 100%;
+                  }
+                  body {
+                    background-color: white;
+                  }
+                  img {
+                    max-width: 100%;
+                    max-height: 100vh;
+                    display: block;
+                    margin: 0 auto;
+                  }
+                }
                 body {
                   margin: 0;
                   display: flex;
@@ -1024,32 +1065,23 @@ export default function CustomerBoothSession() {
                   max-height: 100vh;
                   object-fit: contain;
                 }
-                @page {
-                  margin: 0;
-                  size: ${pageSizeCss};
-                }
-                @media print {
-                  body {
-                    background-color: white;
-                  }
-                  img {
-                    max-width: 100%;
-                    max-height: 100vh;
-                  }
-                }
               </style>
             </head>
             <body>
               <img id="print-image" src="${compiledStripUrl}" />
               <script>
                 const img = document.getElementById('print-image');
-                if (img.complete) {
-                  window.focus();
-                  window.print();
-                } else {
-                  img.onload = function() {
+                function triggerPrint() {
+                  setTimeout(function() {
                     window.focus();
                     window.print();
+                  }, 250);
+                }
+                if (img.complete) {
+                  triggerPrint();
+                } else {
+                  img.onload = function() {
+                    triggerPrint();
                   };
                 }
               </script>
